@@ -1,0 +1,1 @@
+export default function Preview(){return <div style={{minHeight:'100vh',display:'grid',placeItems:'center',padding:20}}><iframe title="Prévia mobile 390 por 844" src="/" style={{width:390,height:844,border:'1px solid #3d4932',borderRadius:24,maxWidth:'100%'}}/></div>}
