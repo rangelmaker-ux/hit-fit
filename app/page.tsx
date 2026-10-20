@@ -1,41 +1,876 @@
 "use client";
-import { useEffect, useState } from 'react';
-import { Dumbbell, Timer, Check, Play, X, ChevronRight, Flame, UserRound, UsersRound, Settings2, BarChart3, Pause, RotateCcw, ArrowUpRight } from 'lucide-react';
-const days=['SEG','TER','QUA','QUI','SEX'];
-const groups=['Perna completa','Costas','Ombro','Glúteo','Peito'];
-const exercises=[['Agachamento livre','Leg press','Cadeira extensora','Mesa flexora','Panturrilha em pé'],['Puxada frontal','Remada baixa','Remada unilateral','Pulldown'],['Desenvolvimento','Elevação lateral','Elevação frontal','Crucifixo inverso'],['Elevação pélvica','Agachamento sumô','Cadeira abdutora','Coice no cabo'],['Supino reto','Supino inclinado','Crucifixo','Peck deck']];
-type Saved=Record<string,boolean>;
-type Setup={mode:'solo'|'couple';people:{id:string;name:string}[]};
-const newPersonId=()=> 'person-'+Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16).padStart(8,'0')).join('');
-const validSetup=(v:unknown):v is Setup=>{const c=v as Setup;return !!c && ['solo','couple'].includes(c.mode) && Array.isArray(c.people) && c.people.length>=(c.mode==='couple'?2:1) && c.people.every(p=>typeof p.id==='string' && typeof p.name==='string' && p.name.trim().length>0) && new Set(c.people.map(p=>p.id)).size===c.people.length};
-export default function Home(){
- const [config,setConfig]=useState<Setup|null>(null),[editing,setEditing]=useState(false),[mode,setMode]=useState<'solo'|'couple'>('solo'),[firstName,setFirstName]=useState(''),[secondName,setSecondName]=useState('');
- const [profile,setProfile]=useState('Rangel'),[day,setDay]=useState(0),[saved,setSaved]=useState<Saved>({}),[ready,setReady]=useState(false),[view,setView]=useState('Treino'),[modal,setModal]=useState<string|null>(null),[remaining,setRemaining]=useState(60),[running,setRunning]=useState(false),[end,setEnd]=useState(0),[week,setWeek]=useState(''),[storageError,setStorageError]=useState(false);
- useEffect(()=>{const d=new Date();setDay(Math.min(4,Math.max(0,d.getDay()-1)));d.setDate(d.getDate()-((d.getDay()+6)%7));setWeek(`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`);try{setSaved(JSON.parse(localStorage.getItem('rj-progress-v1')||'{}'));setProfile(localStorage.getItem('rj-profile')||'Rangel');const c=JSON.parse(localStorage.getItem('hitfit-setup-v1')||'null');if(validSetup(c)){setConfig(c);setMode(c.mode);setFirstName(c.people[0].name);setSecondName(c.people[1]?.name||'');const active=localStorage.getItem('rj-profile');setProfile(c.people.slice(0,c.mode==='solo'?1:2).find(p=>p.id===active)?.id||c.people[0].id)}}catch{setStorageError(true)}setReady(true)},[]);
- useEffect(()=>{if(ready)try{localStorage.setItem('rj-progress-v1',JSON.stringify(saved));localStorage.setItem('rj-profile',profile)}catch{setStorageError(true)}},[saved,profile,ready]);
- useEffect(()=>{if(!running)return;const id=setInterval(()=>{const n=Math.max(0,Math.ceil((end-Date.now())/1000));setRemaining(n);if(!n){setRunning(false);navigator.vibrate?.([150,70,150])}},200);return()=>clearInterval(id)},[running,end]);
- const people=config?.people.slice(0,config.mode==='solo'?1:2)||[];
- const person=people.find(p=>p.id===profile)||people[0];
- const displayName=person?.name||'';
- function completeSetup(e:React.FormEvent<HTMLFormElement>){e.preventDefault();const names=[firstName.trim(),secondName.trim()];if(!names[0]||(mode==='couple'&&!names[1]))return;const existing=config?.people||[];const members=names.slice(0,mode==='couple'?2:1).map((name,i)=>({id:existing[i]?.id||(!config&&['Rangel','Jack'].includes(name)?name:newPersonId()),name}));if(mode==='solo'&&existing[1])members.push(existing[1]);if(members.length===2&&members[0].id===members[1].id)members[1].id=newPersonId();const next={mode,people:members};setConfig(next);setProfile(members[0].id);setEditing(false);setRunning(false);setRemaining(60);setModal(null);try{localStorage.setItem('hitfit-setup-v1',JSON.stringify(next))}catch{setStorageError(true)}}
- const key=(d:number,e:number,s:number)=>`${week}:${profile}:${d}:${e}:${s}`;
- const count=(d:number)=>exercises[d].reduce((a,_,e)=>a+[0,1,2].filter(s=>saved[key(d,e,s)]).length,0);
- const total=exercises[day].length*3,done=count(day),pct=Math.round(done/total*100);
- const start=(seconds=remaining)=>{setRemaining(seconds);setEnd(Date.now()+seconds*1000);setRunning(true)};
- function toggle(e:number,s:number){const k=key(day,e,s);setSaved(v=>({...v,[k]:!v[k]}));}
- const brand=<a className="brand" href="/" aria-label="Hit-Fit"><span className="brand-icon"><Dumbbell size={22}/></span><span className="hitfit-wordmark">Hit<em>-</em>Fit<small>SEU TREINO. SEU RITMO.</small></span></a>;
- if(!ready)return <main className="app"><header>{brand}</header><p role="status">Carregando seu treino…</p></main>;
- if(!config||editing)return <main className="app onboarding"><header>{brand}</header><section className="intro"><p className="eyebrow">VAMOS COMEÇAR</p><h1>Como você<br/>vai treinar<span>?</span></h1><p>Seu espaço para acompanhar cada série.</p></section><form onSubmit={completeSetup}><fieldset className="mode-choices"><legend className="sr-only">Como você vai treinar?</legend>{(['solo','couple'] as const).map(m=><label key={m} className={mode===m?'mode-choice chosen':'mode-choice'}><input type="radio" name="training-mode" value={m} checked={mode===m} onChange={()=>setMode(m)}/>{m==='solo'?<UserRound size={26}/>:<UsersRound size={26}/>}<strong>{m==='solo'?'Sozinho':'Em casal'}</strong><span>{m==='solo'?'Meu treino, meu progresso.':'Dois perfis, cada conquista separada.'}</span></label>)}</fieldset><div className="name-fields"><label>{mode==='solo'?'Qual é o seu nome?':'Seu nome'}<input autoComplete="given-name" maxLength={32} required value={firstName} onChange={e=>setFirstName(e.target.value)} placeholder="Como podemos te chamar?"/></label>{mode==='couple'&&<label>Nome de quem treina com você<input autoComplete="off" maxLength={32} required value={secondName} onChange={e=>setSecondName(e.target.value)} placeholder="Nome da outra pessoa"/></label>}</div>{mode==='couple'&&<p className="onboarding-note">Cada pessoa terá seu próprio checklist e progresso. Vocês alternam entre os nomes na tela de treino.</p>}<button className="primary" type="submit">{editing?'Salvar alterações':'Começar meu treino'}<ChevronRight size={20}/></button>{editing&&<button className="cancel-setup" type="button" onClick={()=>{if(!config)return;setMode(config.mode);setFirstName(config.people[0].name);setSecondName(config.people[1]?.name||'');setEditing(false)}}>Voltar sem alterar</button>}<p className="onboarding-note">Salvo neste aparelho.</p></form></main>;
- return <main className="app"><header>{brand}<button className="avatar" aria-label="Editar nomes e modo de treino" onClick={()=>setEditing(true)}><Settings2 size={19}/></button></header>
- <div className="training-owner"><span>{config.mode==='couple'?'TREINO EM CASAL':'MEU ESPAÇO'}</span><strong>{people.map(p=>p.name).join(' & ')}</strong></div>
- {config.mode==='couple'?<div className="profiles" aria-label="Perfil">{people.map(p=><button key={p.id} aria-pressed={profile===p.id} className={profile===p.id?'selected':''} onClick={()=>{setProfile(p.id);setRunning(false);setRemaining(60)}}><span>{p.name[0]}</span><b>{p.name}</b>{profile===p.id&&<Check size={16}/>}</button>)}</div>:<div className="solo-profile"><span>{displayName[0]}</span><strong>{displayName}</strong><span>Treino individual</span></div>}
- <section className="greeting"><div><p>UM DIA DE CADA VEZ.</p><h1>Bora treinar, {displayName}<span>.</span></h1></div><Flame className="green" size={28}/></section>
- <div className="week" aria-label="Dias da semana">{days.map((d,i)=><button key={d} aria-pressed={day===i} className={day===i?'active':''} onClick={()=>{setDay(i);setView('Treino')}}><span>{d}</span><strong>{String(i+1).padStart(2,'0')}</strong><i className={count(i)>0?'filled':''}/></button>)}</div>
- {view==='Treino'?<><section className="workout"><div className="workout-top"><span className="tag">TREINO {String.fromCharCode(65+day)}</span><span className="muted">{days[day]} <span className="green">/</span> SEMANA ATUAL</span></div><h2>{groups[day]}</h2><div className="workout-meta"><span><Dumbbell size={15}/>{exercises[day].length} exercícios</span><span><Timer size={15}/>No seu ritmo</span></div><div className="progress-info"><span>Seu progresso</span><strong>{pct}<small>%</small></strong></div><div className="progress"><i style={{width:`${pct}%`}}/></div><div className="progress-caption">{done===total?'Treino completo. Você fez acontecer!':`${done} de ${total} séries concluídas`}</div></section>
- <div className="section-title"><h3>Seu treino</h3><span>MARQUE CADA SÉRIE</span></div><p className="demo-note">Ficha de demonstração · exercícios a confirmar</p>
- <div className="exercise-list">{exercises[day].map((name,e)=><article className="exercise" key={name}><div className="exercise-heading"><button className="exercise-art" onClick={()=>setModal(name)} aria-label={`Ver execução de ${name}`}><Dumbbell size={29}/><span><Play size={10} fill="currentColor"/></span></button><div><span className="exercise-number">EXERCÍCIO {String(e+1).padStart(2,'0')}</span><h4>{name}</h4><p>3 séries <b>·</b> 12 repetições</p></div><button className="icon-button" onClick={()=>setModal(name)} aria-label={`Abrir ${name}`}><ChevronRight size={20}/></button></div><div className="sets">{[0,1,2].map(s=><button key={s} aria-pressed={!!saved[key(day,e,s)]} aria-label={`${name}, série ${s+1}`} onClick={()=>toggle(e,s)} className={saved[key(day,e,s)]?'checked':''}><span>{saved[key(day,e,s)]?<Check size={17}/>:s+1}</span>{saved[key(day,e,s)]?'Feita':`Série ${s+1}`}</button>)}</div></article>)}</div></>:<section className="history"><h2>Sua semana</h2><p className="muted">Progresso de {displayName}</p>{groups.map((g,d)=><button key={g} onClick={()=>{setDay(d);setView('Treino')}}><span><small>{days[d]}</small><strong>{g}</strong></span><span>{count(d)}/{exercises[d].length*3}<ChevronRight size={17}/></span></button>)}</section>}
- <p className="save-note">{storageError?'Não foi possível salvar neste navegador.':'Progresso salvo neste aparelho, separado por perfil e semana.'}</p>
- <div className="bottom"><div className="rest"><span className="rest-icon"><Timer size={21}/></span><div><small>{remaining===0?'DESCANSO CONCLUÍDO':'TEMPO DE DESCANSO'}</small><strong aria-live="off">{String(Math.floor(remaining/60)).padStart(2,'0')}:{String(remaining%60).padStart(2,'0')}</strong></div><button className="reset" aria-label="Reiniciar descanso" onClick={()=>{setRunning(false);setRemaining(60)}}><RotateCcw size={18}/></button><button className="rest-start" onClick={()=>running?setRunning(false):start(remaining||60)}>{running?<Pause size={16}/>:<Play size={16} fill="currentColor"/>}{running?'Pausar':remaining===60?'Iniciar':'Retomar'}</button></div><nav><button className={view==='Treino'?'current':''} onClick={()=>setView('Treino')}><Dumbbell size={21}/>Treino</button><button className={view==='Progresso'?'current':''} onClick={()=>setView('Progresso')}><BarChart3 size={21}/>Progresso</button><button onClick={()=>setModal('Descanso')}><Timer size={21}/>Descanso</button></nav></div>
- {modal&&<div className="overlay" onClick={()=>setModal(null)}><section className="sheet" role="dialog" aria-modal="true" aria-label={modal} onClick={e=>e.stopPropagation()}><button className="close icon-button" aria-label="Fechar" onClick={()=>setModal(null)}><X/></button><p className="eyebrow">{modal==='Descanso'?'RECUPERE O FÔLEGO':'EXECUÇÃO DO EXERCÍCIO'}</p><h2>{modal}</h2>{modal==='Descanso'?<><p>Escolha o tempo de descanso.</p><div className="durations">{[30,60,90,120].map(n=><button key={n} onClick={()=>{start(n);setModal(null)}}>{n}s</button>)}</div></>:<><div className="animation-placeholder"><Play size={40}/><span>Animação em preparação</span></div><p>A demonstração de {modal.toLowerCase()} será incluída após a aprovação da interface e confirmação da ficha.</p><button className="primary" onClick={()=>setModal(null)}>Voltar ao treino <ArrowUpRight size={18}/></button></>}</section></div>}
- </main>
+
+import React, { useEffect, useState, useCallback, useSyncExternalStore } from 'react';
+import { WORKOUT_DAYS, Exercise } from '@/lib/workout-data';
+import { ExerciseDetailModal } from '@/components/exercise-detail-modal';
+import { NutritionView } from '@/components/nutrition-view';
+import {
+  Dumbbell,
+  Check,
+  Play,
+  Pause,
+  Flame,
+  Settings2,
+  BarChart3,
+  Utensils,
+  Watch,
+  Heart,
+  Sparkles,
+  Layers,
+  Zap
+} from 'lucide-react';
+
+interface CoupleSetup {
+  mode: 'solo' | 'couple';
+  people: { id: string; name: string }[];
+}
+
+interface SavedSetState {
+  done: boolean;
+  weightKg?: string;
+}
+
+function getInitialDayIndex(): number {
+  if (typeof window === 'undefined') return 0;
+  const today = new Date();
+  return Math.min(4, Math.max(0, today.getDay() === 0 ? 0 : today.getDay() - 1));
+}
+
+function getInitialWeek(): string {
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  return `${startOfWeek.getFullYear()}-W${Math.ceil(startOfWeek.getDate() / 7)}`;
+}
+
+function getInitialConfig(): CoupleSetup {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('hitfit-setup-v2');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.people && parsed.people.length > 0) return parsed;
+      }
+    } catch {
+      // Ignora erro
+    }
+  }
+  return {
+    mode: 'couple',
+    people: [
+      { id: 'person-rangel', name: 'Rangel' },
+      { id: 'person-geicsania', name: 'Geicsania' }
+    ]
+  };
+}
+
+function getInitialProfile(): string {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('hitfit-active-profile-v2');
+      if (stored) return stored;
+    } catch {
+      // Ignora erro
+    }
+  }
+  return 'person-rangel';
+}
+
+function getInitialSavedSets(): Record<string, SavedSetState> {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('hitfit-progress-v2');
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // Ignora erro
+    }
+  }
+  return {};
+}
+
+function getInitialWatchCalories(): number {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('hitfit-watch-cals-v2');
+      if (stored) return Number(stored) || 420;
+    } catch {
+      // Ignora erro
+    }
+  }
+  return 420;
+}
+
+export default function Home() {
+  // Configuração dos Perfis (Rangel & Geicsania)
+  const [config, setConfig] = useState<CoupleSetup>(getInitialConfig);
+  const [profile, setProfile] = useState<string>(getInitialProfile);
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [firstName, setFirstName] = useState(() => config.people[0]?.name || 'Rangel');
+  const [secondName, setSecondName] = useState(() => config.people[1]?.name || 'Geicsania');
+
+  // Estado do Treino e Navegação inicializados de forma pura
+  const [dayIndex, setDayIndex] = useState<number>(getInitialDayIndex);
+  const [viewTab, setViewTab] = useState<'treino' | 'nutricao' | 'evolucao'>('treino');
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+
+  // Checklist de Séries e Cargas (salvo por chave semana:perfil:dia:exercicio:serie)
+  const [savedSets, setSavedSets] = useState<Record<string, SavedSetState>>(getInitialSavedSets);
+  const [currentWeek] = useState<string>(getInitialWeek);
+  const isClient = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
+  // Cronômetro Geral do Treino (Play / Pausa de Sessão)
+  const [workoutActive, setWorkoutActive] = useState(false);
+  const [workoutSeconds, setWorkoutSeconds] = useState(0);
+
+  // Timer de Descanso entre Séries
+  const [restSeconds, setRestSeconds] = useState(60);
+  const [restActive, setRestActive] = useState(false);
+  const [restEndTime, setRestEndTime] = useState(0);
+
+  // Modal do Relógio Inteligente / Dados Cardíacos
+  const [watchModalOpen, setWatchModalOpen] = useState(false);
+  const [watchCalories, setWatchCalories] = useState<number>(getInitialWatchCalories);
+  const [watchHeartRate, setWatchHeartRate] = useState<number>(135);
+  const [bleConnected, setBleConnected] = useState(false);
+  const [bleDeviceName, setBleDeviceName] = useState<string | null>(null);
+
+  // Salvar no LocalStorage
+  useEffect(() => {
+    if (!isClient) return;
+    try {
+      localStorage.setItem('hitfit-setup-v2', JSON.stringify(config));
+      localStorage.setItem('hitfit-active-profile-v2', profile);
+      localStorage.setItem('hitfit-progress-v2', JSON.stringify(savedSets));
+      localStorage.setItem('hitfit-watch-cals-v2', watchCalories.toString());
+    } catch {
+      // Ignora falhas de quota de storage
+    }
+  }, [config, profile, savedSets, watchCalories, isClient]);
+
+  // Cronômetro da Sessão de Treino
+  useEffect(() => {
+    if (!workoutActive) return;
+    const interval = setInterval(() => {
+      setWorkoutSeconds((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [workoutActive]);
+
+  // Contagem regressiva do Timer de Descanso
+  useEffect(() => {
+    if (!restActive) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((restEndTime - Date.now()) / 1000));
+      setRestSeconds(remaining);
+      if (remaining === 0) {
+        setRestActive(false);
+        if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate([200, 100, 200, 100, 300]);
+        }
+      }
+    }, 250);
+    return () => clearInterval(interval);
+  }, [restActive, restEndTime]);
+
+  // Perfil Ativo e Cores Dinâmicas
+  const currentPerson = config.people.find((p) => p.id === profile) || config.people[0];
+  const isGeicsania = currentPerson.name.toLowerCase().includes('geic');
+  // Cyber Lime (#c3f75a) para Rangel, Electric Magenta (#ff2e93) para Geicsania
+  const accentColor = isGeicsania ? '#ff2e93' : '#c3f75a';
+  const accentGlow = isGeicsania ? 'rgba(255, 46, 147, 0.25)' : 'rgba(195, 247, 90, 0.25)';
+
+  // Treino do Dia Atual
+  const todayWorkout = WORKOUT_DAYS[dayIndex];
+
+  // Chave estável para persistência de séries
+  const getSetKey = (dayIdx: number, exerciseId: string, setIdx: number) =>
+    `${currentWeek}:${profile}:${dayIdx}:${exerciseId}:${setIdx}`;
+
+  const toggleSet = (exerciseId: string, setIdx: number) => {
+    const key = getSetKey(dayIndex, exerciseId, setIdx);
+    setSavedSets((prev) => {
+      const current = prev[key] || { done: false };
+      return {
+        ...prev,
+        [key]: { ...current, done: !current.done }
+      };
+    });
+    // Inicia descanso automático de 60s ao concluir uma série
+    startRest(60);
+  };
+
+  const updateSetWeight = (exerciseId: string, setIdx: number, weightKg: string) => {
+    const key = getSetKey(dayIndex, exerciseId, setIdx);
+    setSavedSets((prev) => {
+      const current = prev[key] || { done: false };
+      return {
+        ...prev,
+        [key]: { ...current, weightKg }
+      };
+    });
+  };
+
+  const startRest = useCallback((seconds: number) => {
+    setRestSeconds(seconds);
+    const targetEnd = Date.now() + seconds * 1000;
+    setRestEndTime(targetEnd);
+    setRestActive(true);
+  }, []);
+
+  // Cálculo do progresso no dia
+  const totalSetsToday = todayWorkout.exercises.reduce((sum, ex) => sum + ex.sets, 0);
+  const completedSetsToday = todayWorkout.exercises.reduce((sum, ex) => {
+    let completed = 0;
+    for (let s = 0; s < ex.sets; s++) {
+      if (savedSets[getSetKey(dayIndex, ex.id, s)]?.done) completed++;
+    }
+    return sum + completed;
+  }, 0);
+  const progressPct = Math.round((completedSetsToday / Math.max(1, totalSetsToday)) * 100);
+
+  // Web Bluetooth API para sensores cardíacos BLE
+  const connectBluetoothWatch = async () => {
+    interface NavigatorBLE {
+      bluetooth?: {
+        requestDevice: (options: { filters: { services: string[] }[] }) => Promise<{ name?: string }>;
+      };
+    }
+    const nav = typeof navigator !== 'undefined' ? (navigator as unknown as NavigatorBLE) : null;
+    if (nav?.bluetooth) {
+      try {
+        const device = await nav.bluetooth.requestDevice({
+          filters: [{ services: ['heart_rate'] }]
+        });
+        setBleDeviceName(device.name || 'Monitor Cardíaco BLE');
+        setBleConnected(true);
+      } catch {
+        // Usuário cancelou ou não há suporte no navegador atual
+        alert('Para pareamento BLE nativo, use Google Chrome ou Edge no Android/PC.');
+      }
+    } else {
+      alert('Seu navegador atual não suporta Web Bluetooth. Você pode digitar os dados do seu relógio manualmente!');
+    }
+  };
+
+  const formatTimer = (totalSec: number) => {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  if (!isClient) {
+    return (
+      <main className="min-h-screen bg-[#090b09] text-white flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <Dumbbell className="w-8 h-8 text-[#c3f75a] animate-spin" />
+          <p className="text-sm font-semibold text-neutral-400">Carregando treino do casal…</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#070908] text-neutral-100 flex flex-col items-center selection:bg-[#c3f75a]/30">
+      <div className="w-full max-w-lg min-h-screen flex flex-col px-4 pt-4 pb-36">
+        
+        {/* TOPO: LOGO E CONFIGURAÇÕES */}
+        <header className="flex items-center justify-between py-2 border-b border-white/5 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div 
+              className="w-10 h-10 rounded-2xl flex items-center justify-center font-black shadow-lg border"
+              style={{ 
+                backgroundColor: `${accentColor}18`, 
+                borderColor: `${accentColor}50`,
+                color: accentColor 
+              }}
+            >
+              <Dumbbell size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1 font-black text-lg tracking-tight text-white">
+                <span>HIT</span>
+                <span style={{ color: accentColor }}>-</span>
+                <span>FIT</span>
+                <span 
+                  className="text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase ml-1 tracking-wider"
+                  style={{ backgroundColor: `${accentColor}25`, color: accentColor }}
+                >
+                  DUO
+                </span>
+              </div>
+              <p className="text-[10px] tracking-widest text-neutral-400 uppercase font-semibold">
+                Treino para Casal · Academia
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Botão Sincronizar Relógio Inteligente */}
+            <button
+              onClick={() => setWatchModalOpen(true)}
+              className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 transition-colors flex items-center gap-1.5"
+              aria-label="Dados do Relógio"
+            >
+              <Watch size={18} style={{ color: bleConnected ? accentColor : '#94a3b8' }} />
+              <span className="text-[11px] font-bold font-mono">{watchCalories} kcal</span>
+            </button>
+
+            {/* Botão de Edição dos Perfis */}
+            <button
+              onClick={() => setEditingConfig(!editingConfig)}
+              className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 transition-colors"
+              aria-label="Configurar Perfis"
+            >
+              <Settings2 size={18} />
+            </button>
+          </div>
+        </header>
+
+        {/* MODAL / FORMULÁRIO DE EDIÇÃO DOS NOMES DO CASAL */}
+        {editingConfig && (
+          <div className="mb-4 p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-3 animate-in fade-in">
+            <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
+              Nomes de Quem Treina Juntos:
+            </span>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Nome dele"
+                className="p-2.5 bg-black/50 border border-white/15 rounded-xl text-white font-bold"
+              />
+              <input
+                type="text"
+                value={secondName}
+                onChange={(e) => setSecondName(e.target.value)}
+                placeholder="Nome dela"
+                className="p-2.5 bg-black/50 border border-white/15 rounded-xl text-white font-bold"
+              />
+            </div>
+            <button
+              onClick={() => {
+                setConfig({
+                  mode: 'couple',
+                  people: [
+                    { id: 'person-rangel', name: firstName.trim() || 'Rangel' },
+                    { id: 'person-geicsania', name: secondName.trim() || 'Geicsania' }
+                  ]
+                });
+                setEditingConfig(false);
+              }}
+              className="py-2.5 px-4 rounded-xl font-bold text-xs shadow-md transition-transform active:scale-95 text-[#10150d]"
+              style={{ backgroundColor: accentColor }}
+            >
+              Salvar Nomes
+            </button>
+          </div>
+        )}
+
+        {/* SELETOR RÁPIDO DO PERFIL ATIVO (RANGEL vs GEICSANIA) */}
+        <div className="flex items-center gap-2 mb-4 p-1 rounded-2xl bg-white/5 border border-white/10">
+          {config.people.map((p) => {
+            const isSelected = profile === p.id;
+            const isGeic = p.name.toLowerCase().includes('geic');
+            const pColor = isGeic ? '#ff2e93' : '#c3f75a';
+
+            return (
+              <button
+                key={p.id}
+                onClick={() => setProfile(p.id)}
+                className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2.5 transition-all ${
+                  isSelected
+                    ? 'bg-white/15 text-white shadow-md font-bold'
+                    : 'text-neutral-400 hover:text-neutral-200 font-medium'
+                }`}
+                style={isSelected ? { borderColor: `${pColor}40`, borderWidth: 1 } : {}}
+              >
+                <span
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black"
+                  style={{
+                    backgroundColor: isSelected ? pColor : 'rgba(255,255,255,0.1)',
+                    color: isSelected ? '#10150d' : '#fff'
+                  }}
+                >
+                  {p.name[0]}
+                </span>
+                <span className="text-sm">{p.name}</span>
+                {isSelected && (
+                  <span
+                    className="w-2 h-2 rounded-full animate-pulse ml-auto"
+                    style={{ backgroundColor: pColor }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ======================= ABA DE NUTRIÇÃO ======================= */}
+        {viewTab === 'nutricao' && (
+          <NutritionView
+            profileId={profile}
+            profileName={currentPerson.name}
+            accentColor={accentColor}
+            todayWorkoutCaloriesBurned={watchCalories}
+          />
+        )}
+
+        {/* ======================= ABA DE EVOLUÇÃO ======================= */}
+        {viewTab === 'evolucao' && (
+          <div className="flex flex-col gap-4 animate-in fade-in pb-20">
+            <div className="p-5 rounded-3xl bg-white/5 border border-white/10 flex flex-col gap-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">
+                Consistência Semanal do Casal
+              </span>
+              <h3 className="text-xl font-black text-white">
+                Semana em Andamento ({currentWeek})
+              </h3>
+              <p className="text-xs text-neutral-400">
+                Acompanhe quantas séries cada um já completou nos 5 dias de treino:
+              </p>
+
+              <div className="flex flex-col gap-3 pt-2">
+                {config.people.map((p) => {
+                  const isGeic = p.name.toLowerCase().includes('geic');
+                  const pColor = isGeic ? '#ff2e93' : '#c3f75a';
+
+                  // Conta total de séries feitas por esse perfil
+                  const totalDone = Object.keys(savedSets).filter(
+                    (k) => k.startsWith(`${currentWeek}:${p.id}`) && savedSets[k]?.done
+                  ).length;
+
+                  return (
+                    <div key={p.id} className="p-3.5 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black"
+                          style={{ backgroundColor: pColor, color: '#10150d' }}
+                        >
+                          {p.name[0]}
+                        </span>
+                        <div>
+                          <strong className="text-sm text-white block">{p.name}</strong>
+                          <span className="text-[11px] text-neutral-400">{totalDone} séries concluídas</span>
+                        </div>
+                      </div>
+                      <span className="text-sm font-black font-mono" style={{ color: pColor }}>
+                        {totalDone} pts
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ======================= ABA DE TREINO ======================= */}
+        {viewTab === 'treino' && (
+          <div className="flex flex-col gap-4 animate-in fade-in">
+            {/* SELETOR DOS 5 DIAS DA SEMANA (SEG A SEX) */}
+            <div className="grid grid-cols-5 gap-1.5 p-1 bg-white/5 rounded-2xl border border-white/10">
+              {WORKOUT_DAYS.map((w, idx) => {
+                const isActive = dayIndex === idx;
+
+                return (
+                  <button
+                    key={w.dayShort}
+                    onClick={() => setDayIndex(idx)}
+                    className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all ${
+                      isActive
+                        ? 'bg-white/15 text-white font-bold shadow-md'
+                        : 'text-neutral-400 hover:text-neutral-200'
+                    }`}
+                    style={isActive ? { borderColor: `${accentColor}50`, borderWidth: 1 } : {}}
+                  >
+                    <span className="text-[10px] font-bold tracking-wider">{w.dayShort}</span>
+                    <span className="text-sm font-mono">{idx + 1}</span>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{
+                        backgroundColor: isActive ? accentColor : 'transparent'
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* CARD DO TREINO DO DIA (HERO BANNER) */}
+            <div
+              className="p-5 rounded-3xl border relative overflow-hidden flex flex-col gap-3 shadow-xl"
+              style={{
+                background: `linear-gradient(135deg, ${accentGlow}, rgba(13,16,13,0.95) 75%)`,
+                borderColor: `${accentColor}40`
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-md"
+                  style={{ backgroundColor: accentColor, color: '#10150d' }}
+                >
+                  {todayWorkout.focusTag}
+                </span>
+                <span className="text-xs text-neutral-300 font-mono">
+                  {todayWorkout.durationMin} MINUTOS
+                </span>
+              </div>
+
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                  {todayWorkout.title}
+                </h1>
+                <p className="text-xs text-neutral-300 mt-1">
+                  {todayWorkout.subtitle}
+                </p>
+              </div>
+
+              {/* Barra de Progresso do Treino */}
+              <div className="flex flex-col gap-1.5 pt-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-300 font-medium">Progresso de {currentPerson.name}</span>
+                  <span className="font-bold font-mono" style={{ color: accentColor }}>
+                    {progressPct}% ({completedSetsToday}/{totalSetsToday} séries)
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/10">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${progressPct}%`, backgroundColor: accentColor }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* CARD DO FINALIZADOR METABÓLICO (CARDIO / HIIT DO DIA) */}
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3">
+              <div 
+                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+              >
+                <Flame size={20} />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">
+                    FINALIZADOR METABÓLICO · {todayWorkout.finishCardio.durationMin} MIN
+                  </span>
+                  <span className="text-[11px] font-bold text-neutral-300 font-mono">
+                    ~{todayWorkout.finishCardio.caloriesBurnTarget} kcal
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-white mt-0.5">
+                  {todayWorkout.finishCardio.name}
+                </h4>
+                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
+                  {todayWorkout.finishCardio.protocol}
+                </p>
+              </div>
+            </div>
+
+            {/* TÍTULO DA SEÇÃO DE EXERCÍCIOS */}
+            <div className="flex items-center justify-between px-1 pt-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <Dumbbell size={15} style={{ color: accentColor }} />
+                Exercícios do Treino ({todayWorkout.exercises.length})
+              </span>
+              <span className="text-[11px] text-neutral-500">Toque para ver a máquina</span>
+            </div>
+
+            {/* LISTA COMPLETA DOS EXERCÍCIOS COM CHECKLIST E GUIA DE MÁQUINA */}
+            <div className="flex flex-col gap-3">
+              {todayWorkout.exercises.map((exercise, eIdx) => {
+                return (
+                  <article
+                    key={exercise.id}
+                    className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-3 hover:border-white/20 transition-all shadow-md"
+                  >
+                    {/* Linha Superior: Nome do Exercício + Botão de Abrir Guia Biomecânico */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-mono text-neutral-400">
+                            #{String(eIdx + 1).padStart(2, '0')}
+                          </span>
+                          <span
+                            className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full"
+                            style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+                          >
+                            {exercise.targetMuscle}
+                          </span>
+                        </div>
+                        <h3 className="text-base font-bold text-white tracking-tight">
+                          {exercise.name}
+                        </h3>
+                        <p className="text-xs text-neutral-400 mt-0.5">
+                          {exercise.sets} séries · {exercise.reps} repetições
+                        </p>
+                      </div>
+
+                      {/* Botão de abrir modal biomecânico */}
+                      <button
+                        onClick={() => setSelectedExercise(exercise)}
+                        className="py-1.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white flex items-center gap-1.5 transition-colors border border-white/10"
+                        aria-label={`Ver máquina e execução de ${exercise.name}`}
+                      >
+                        <Sparkles size={13} style={{ color: accentColor }} />
+                        <span>Ver Máquina</span>
+                      </button>
+                    </div>
+
+                    {/* MÁQUINA PRINCIPAL EM DESTAQUE NO PRÓPRIO CARD */}
+                    <div className="text-[11px] text-neutral-300 bg-black/40 p-2.5 rounded-xl border border-white/5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-neutral-400">
+                        <Layers size={13} style={{ color: accentColor }} />
+                        Aparelho:
+                      </span>
+                      <strong className="text-white truncate max-w-[240px]">
+                        {exercise.machines.primary.name}
+                      </strong>
+                    </div>
+
+                    {/* SÉRIES E REGISTRO DE CARGAS */}
+                    <div className="flex flex-col gap-2 pt-1 border-t border-white/5">
+                      <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
+                        Séries de {currentPerson.name} (Marque ao terminar):
+                      </span>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {Array.from({ length: exercise.sets }).map((_, sIdx) => {
+                          const setKey = getSetKey(dayIndex, exercise.id, sIdx);
+                          const state = savedSets[setKey] || { done: false, weightKg: '' };
+
+                          return (
+                            <div
+                              key={sIdx}
+                              className={`p-2 rounded-xl border flex flex-col gap-1 transition-all ${
+                                state.done
+                                  ? 'bg-[#152010] border-emerald-500/50 text-white'
+                                  : 'bg-black/30 border-white/10 text-neutral-400'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold font-mono">SÉRIE {sIdx + 1}</span>
+                                <button
+                                  onClick={() => toggleSet(exercise.id, sIdx)}
+                                  className={`w-6 h-6 rounded-lg flex items-center justify-center transition-transform active:scale-90 ${
+                                    state.done
+                                      ? 'bg-emerald-400 text-black shadow-sm'
+                                      : 'bg-white/10 hover:bg-white/20 text-neutral-300'
+                                  }`}
+                                  aria-label={`Marcar série ${sIdx + 1}`}
+                                >
+                                  {state.done ? <Check size={14} strokeWidth={3} /> : sIdx + 1}
+                                </button>
+                              </div>
+
+                              {/* Input de carga rápida */}
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <input
+                                  type="text"
+                                  placeholder="kg"
+                                  value={state.weightKg || ''}
+                                  onChange={(e) => updateSetWeight(exercise.id, sIdx, e.target.value)}
+                                  className="w-full text-[11px] font-mono bg-transparent border-0 border-b border-white/20 focus:border-white p-0 text-white outline-none"
+                                />
+                                <span className="text-[9px] text-neutral-500">kg</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* ======================= BARRA INFERIOR FIXA DE TREINO ======================= */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 flex justify-center bg-[#070908]/95 backdrop-blur-xl border-t border-white/10 py-2.5 px-4">
+        <div className="w-full max-w-lg flex flex-col gap-2">
+          
+          {/* BARRA DE SESSÃO ATIVA & DESCANSO */}
+          <div className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-white/5 border border-white/10 shadow-xl">
+            {/* Cronômetro Geral do Treino com Play/Pause */}
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setWorkoutActive(!workoutActive)}
+                className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-transform active:scale-95"
+                style={{ backgroundColor: accentColor, color: '#10150d' }}
+                aria-label={workoutActive ? 'Pausar Treino' : 'Iniciar Treino'}
+              >
+                {workoutActive ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+              </button>
+              <div>
+                <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block">
+                  {workoutActive ? 'TREINO EM ANDAMENTO' : 'TREINO PAUSADO'}
+                </span>
+                <strong className="text-base font-black font-mono text-white">
+                  {formatTimer(workoutSeconds)}
+                </strong>
+              </div>
+            </div>
+
+            {/* Cronômetro de Descanso entre Séries */}
+            <div className="flex items-center gap-2 pl-3 border-l border-white/10">
+              <div>
+                <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block text-right">
+                  DESCANSO
+                </span>
+                <strong className="text-base font-black font-mono text-amber-300 block text-right">
+                  {formatTimer(restSeconds)}
+                </strong>
+              </div>
+              <div className="flex items-center gap-1">
+                {[45, 60, 90].map((sec) => (
+                  <button
+                    key={sec}
+                    onClick={() => startRest(sec)}
+                    className="px-2 py-1.5 text-[10px] font-bold font-mono rounded-lg bg-white/10 hover:bg-white/20 text-neutral-200 transition-colors"
+                  >
+                    {sec}s
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* NAVEGAÇÃO ENTRE ABAS DO APP */}
+          <nav className="flex items-center justify-around pt-1">
+            <button
+              onClick={() => setViewTab('treino')}
+              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
+                viewTab === 'treino' ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
+              }`}
+            >
+              <Dumbbell size={18} style={viewTab === 'treino' ? { color: accentColor } : {}} />
+              <span>Treino</span>
+            </button>
+
+            <button
+              onClick={() => setViewTab('nutricao')}
+              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
+                viewTab === 'nutricao' ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
+              }`}
+            >
+              <Utensils size={18} style={viewTab === 'nutricao' ? { color: accentColor } : {}} />
+              <span>Nutrição & Peso</span>
+            </button>
+
+            <button
+              onClick={() => setViewTab('evolucao')}
+              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
+                viewTab === 'evolucao' ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
+              }`}
+            >
+              <BarChart3 size={18} style={viewTab === 'evolucao' ? { color: accentColor } : {}} />
+              <span>Evolução</span>
+            </button>
+          </nav>
+        </div>
+      </footer>
+
+      {/* ======================= MODAL BIOMECÂNICO & MÁQUINA ======================= */}
+      {selectedExercise && (
+        <ExerciseDetailModal
+          exercise={selectedExercise}
+          accentColor={accentColor}
+          onClose={() => setSelectedExercise(null)}
+        />
+      )}
+
+      {/* ======================= MODAL DO RELÓGIO INTELIGENTE ======================= */}
+      {watchModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          onClick={() => setWatchModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-[#0e120e] border border-white/10 rounded-3xl p-5 shadow-2xl flex flex-col gap-4 text-neutral-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <Watch size={20} style={{ color: accentColor }} />
+                <h3 className="text-base font-bold text-white">Relógio de {currentPerson.name}</h3>
+              </div>
+              <button
+                onClick={() => setWatchModalOpen(false)}
+                className="text-xs text-neutral-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Registre os dados marcados no seu Apple Watch ou Galaxy Watch para calcular o déficit calórico real:
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-neutral-400 flex items-center gap-1">
+                  <Flame size={14} className="text-amber-400" /> Calorias Queimadas no Treino:
+                </span>
+                <input
+                  type="number"
+                  value={watchCalories}
+                  onChange={(e) => setWatchCalories(Number(e.target.value) || 0)}
+                  className="p-3 bg-black/50 border border-white/15 rounded-xl text-lg font-black font-mono text-white"
+                  placeholder="Ex: 480"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-neutral-400 flex items-center gap-1">
+                  <Heart size={14} className="text-rose-400" /> Frequência Cardíaca Média (BPM):
+                </span>
+                <input
+                  type="number"
+                  value={watchHeartRate}
+                  onChange={(e) => setWatchHeartRate(Number(e.target.value) || 0)}
+                  className="p-3 bg-black/50 border border-white/15 rounded-xl text-lg font-black font-mono text-white"
+                  placeholder="Ex: 138"
+                />
+              </label>
+            </div>
+
+            {/* Conexão via Web Bluetooth API */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-2">
+              <span className="text-[11px] font-bold text-neutral-300 flex items-center gap-1.5">
+                <Zap size={14} style={{ color: accentColor }} />
+                Sensor Cardíaco Bluetooth (BLE)
+              </span>
+              <p className="text-[11px] text-neutral-400">
+                {bleConnected
+                  ? `Conectado a: ${bleDeviceName}`
+                  : 'Pareie cintas ou braceletes esportivos BLE direto no app.'}
+              </p>
+              <button
+                onClick={connectBluetoothWatch}
+                className="py-2 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
+              >
+                {bleConnected ? 'Sensor Conectado ✓' : 'Conectar Sensor BLE'}
+              </button>
+            </div>
+
+            <button
+              onClick={() => setWatchModalOpen(false)}
+              className="py-3 rounded-xl font-bold text-xs shadow-md transition-transform active:scale-95 text-[#10150d]"
+              style={{ backgroundColor: accentColor }}
+            >
+              Salvar Dados do Treino
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
