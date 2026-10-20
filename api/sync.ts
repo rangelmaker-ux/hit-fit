@@ -1,4 +1,3 @@
-import type { IncomingMessage, ServerResponse } from 'http';
 import { verifySessionToken, canModifyAthleteData } from '../lib/auth-crypto';
 import {
   saveAthleteData,
@@ -6,55 +5,33 @@ import {
   StoredAthleteData
 } from '../lib/cloud-store';
 
-interface RequestWithBody extends IncomingMessage {
-  body?: unknown;
-}
+export const config = {
+  runtime: 'edge'
+};
 
-async function parseBody(req: RequestWithBody): Promise<Record<string, unknown>> {
-  if (req.body && typeof req.body === 'object') {
-    return req.body as Record<string, unknown>;
-  }
+const corsHeaders = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};
 
-  return new Promise((resolve) => {
-    let raw = '';
-    req.on('data', (chunk) => {
-      raw += chunk;
-    });
-    req.on('end', () => {
-      try {
-        resolve(raw ? JSON.parse(raw) : {});
-      } catch {
-        resolve({});
-      }
-    });
-    req.on('error', () => resolve({}));
+function jsonResponse(status: number, data: unknown) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: corsHeaders
   });
 }
 
-function sendJson(res: ServerResponse, status: number, data: unknown) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.end(JSON.stringify(data));
-}
-
-export default async function handler(req: RequestWithBody, res: ServerResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
+export default async function handler(req: Request) {
   if (req.method === 'OPTIONS') {
-    res.statusCode = 204;
-    res.end();
-    return;
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   // 1. Verificação Estrita do Token de Sessão em qualquer operação
-  const authHeader = req.headers.authorization;
+  const authHeader = req.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return sendJson(res, 401, {
+    return jsonResponse(401, {
       error: 'Não autorizado: Token de autenticação ausente ou inválido.',
       code: 'UNAUTHORIZED'
     });
@@ -63,7 +40,7 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
   const token = authHeader.substring(7);
   const session = await verifySessionToken(token);
   if (!session) {
-    return sendJson(res, 401, {
+    return jsonResponse(401, {
       error: 'Sessão expirada ou assinatura do token inválida. Faça login novamente.',
       code: 'SESSION_EXPIRED'
     });
@@ -73,7 +50,7 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
 
   // GET: PULL DATA (Buscar dados do atleta autenticado + dados do parceiro em modo leitura)
   if (req.method === 'GET') {
-    const url = new URL(req.url || '/', 'http://localhost');
+    const url = new URL(req.url);
     const partnerId = url.searchParams.get('partnerId');
 
     const myData = await getAthleteData(authenticatedUserId);
@@ -83,7 +60,7 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
       partnerData = await getAthleteData(partnerId);
     }
 
-    return sendJson(res, 200, {
+    return jsonResponse(200, {
       success: true,
       athlete: myData,
       partner: partnerData
@@ -98,11 +75,17 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
 
   // POST: PUSH DATA (Salvar dados de treino, peso, água, metas, etc.)
   if (req.method === 'POST') {
-    const body = await parseBody(req);
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      body = {};
+    }
+
     const targetUserId = body.userId as string;
 
     if (!targetUserId) {
-      return sendJson(res, 400, {
+      return jsonResponse(400, {
         error: 'Identificador do atleta (userId) é obrigatório.',
         code: 'MISSING_USER_ID'
       });
@@ -112,7 +95,7 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
     // Impede ataques por chamadas diretas às APIs e adulteração de identificadores enviados pelo cliente.
     // Rangel pode salvar SOMENTE dados de Rangel. Jéssania pode salvar SOMENTE dados de Jéssania.
     if (!canModifyAthleteData(authenticatedUserId, targetUserId)) {
-      return sendJson(res, 403, {
+      return jsonResponse(403, {
         error: `Acesso negado: O usuário autenticado (${session.name}) não possui permissão para modificar os dados de outro atleta (${targetUserId}).`,
         code: 'FORBIDDEN_CROSS_USER_MODIFICATION',
         authenticatedUser: session.userId,
@@ -150,12 +133,12 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
 
     await saveAthleteData(updatedData);
 
-    return sendJson(res, 200, {
+    return jsonResponse(200, {
       success: true,
       updatedAt: updatedData.updatedAt,
       message: 'Dados sincronizados com sucesso na nuvem.'
     });
   }
 
-  return sendJson(res, 405, { error: 'Método não permitido' });
+  return jsonResponse(405, { error: 'Método não permitido' });
 }

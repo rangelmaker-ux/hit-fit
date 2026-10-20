@@ -1,27 +1,39 @@
-import type { IncomingMessage, ServerResponse } from 'http';
-import { isCloudConfigured } from '../lib/cloud-store';
+export const config = {
+  runtime: 'edge'
+};
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
+export default async function handler(req: Request) {
   if (req.method === 'OPTIONS') {
-    res.statusCode = 204;
-    res.end();
-    return;
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+      }
+    });
   }
 
-  res.statusCode = 200;
-  res.end(
+  const isCloudConfigured = Boolean(
+    process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
+  );
+
+  return new Response(
     JSON.stringify({
       status: 'ok',
       service: 'hit-fit-api',
       version: '2.0.0',
       timestamp: new Date().toISOString(),
-      cloudConnected: isCloudConfigured(),
-      authType: 'pbkdf2_hmac_sha256'
-    })
+      cloudConnected: isCloudConfigured,
+      authType: 'pbkdf2_hmac_sha256',
+      runtime: 'edge'
+    }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
+    }
   );
 }

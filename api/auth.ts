@@ -1,10 +1,10 @@
-import type { IncomingMessage, ServerResponse } from 'http';
 import {
   generateSalt,
   hashPassword,
   verifyPassword,
   createSessionToken,
-  verifySessionToken
+  verifySessionToken,
+  calculateAge
 } from '../lib/auth-crypto';
 import {
   saveUserAccount,
@@ -15,79 +15,41 @@ import {
   StoredUserAccount
 } from '../lib/cloud-store';
 
-interface RequestWithBody extends IncomingMessage {
-  body?: unknown;
-}
+export const config = {
+  runtime: 'edge'
+};
 
-async function parseBody(req: RequestWithBody): Promise<Record<string, unknown>> {
-  if (req.body && typeof req.body === 'object') {
-    return req.body as Record<string, unknown>;
-  }
+const corsHeaders = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};
 
-  return new Promise((resolve) => {
-    let raw = '';
-    req.on('data', (chunk) => {
-      raw += chunk;
-    });
-    req.on('end', () => {
-      try {
-        resolve(raw ? JSON.parse(raw) : {});
-      } catch {
-        resolve({});
-      }
-    });
-    req.on('error', () => resolve({}));
+function jsonResponse(status: number, data: unknown) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: corsHeaders
   });
 }
 
-function sendJson(res: ServerResponse, status: number, data: unknown) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.end(JSON.stringify(data));
-}
-
-/**
- * Calcula a idade com base na data de nascimento (YYYY-MM-DD)
- */
-export function calculateAge(birthDateStr: string): number {
-  if (!birthDateStr) return 0;
-  const birth = new Date(birthDateStr);
-  if (isNaN(birth.getTime())) return 0;
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  return Math.max(0, age);
-}
-
-export default async function handler(req: RequestWithBody, res: ServerResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
+export default async function handler(req: Request) {
   if (req.method === 'OPTIONS') {
-    res.statusCode = 204;
-    res.end();
-    return;
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   // GET: Obter sessão atual via Authorization Bearer token ou listar status de usuários registrados
   if (req.method === 'GET') {
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.get('authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       const session = await verifySessionToken(token);
       if (!session) {
-        return sendJson(res, 401, { error: 'Sessão inválida ou expirada', valid: false });
+        return jsonResponse(401, { error: 'Sessão inválida ou expirada', valid: false });
       }
 
       const user = await getUserAccount(session.userId);
-      return sendJson(res, 200, {
+      return jsonResponse(200, {
         valid: true,
         session,
         user: user
@@ -108,7 +70,7 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
 
     // Se não passou token, retorna quais contas já foram ativadas
     const allUsers = await listAllUsers();
-    return sendJson(res, 200, {
+    return jsonResponse(200, {
       activeAccounts: allUsers.map((u) => ({
         id: u.id,
         username: u.username,
@@ -119,10 +81,16 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
   }
 
   if (req.method !== 'POST') {
-    return sendJson(res, 405, { error: 'Método não permitido' });
+    return jsonResponse(405, { error: 'Método não permitido' });
   }
 
-  const body = await parseBody(req);
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+
   const action = body.action as string;
 
   // AÇÃO 1: CADASTRO INICIAL (REGISTER)
@@ -140,7 +108,7 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
     } = body;
 
     if (!role || !password || typeof password !== 'string' || password.length < 6) {
-      return sendJson(res, 400, {
+      return jsonResponse(400, {
         error: 'Dados incompletos: selecione o atleta e informe uma senha de no mínimo 6 caracteres.'
       });
     }
@@ -213,7 +181,7 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
       role: username
     });
 
-    return sendJson(res, 201, {
+    return jsonResponse(201, {
       success: true,
       token,
       user: {
@@ -234,21 +202,21 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
   if (action === 'login') {
     const { usernameOrRole, password } = body;
     if (!usernameOrRole || !password || typeof password !== 'string') {
-      return sendJson(res, 400, { error: 'Informe o atleta e a senha.' });
+      return jsonResponse(400, { error: 'Informe o atleta e a senha.' });
     }
 
     const normalized = (usernameOrRole as string).toLowerCase().includes('geic') ? 'geicsania' : 'rangel';
     const user = await getUserAccount(normalized);
 
     if (!user) {
-      return sendJson(res, 404, {
+      return jsonResponse(404, {
         error: `Conta de ${normalized === 'rangel' ? 'Rangel' : 'Geicsania'} ainda não foi ativada. Realize o cadastro inicial.`
       });
     }
 
     const isMatch = await verifyPassword(password, user.salt, user.passwordHash);
     if (!isMatch) {
-      return sendJson(res, 401, { error: 'Senha incorreta. Tente novamente.' });
+      return jsonResponse(401, { error: 'Senha incorreta. Tente novamente.' });
     }
 
     const token = await createSessionToken({
@@ -257,7 +225,7 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
       role: user.username
     });
 
-    return sendJson(res, 200, {
+    return jsonResponse(200, {
       success: true,
       token,
       user: {
@@ -274,5 +242,5 @@ export default async function handler(req: RequestWithBody, res: ServerResponse)
     });
   }
 
-  return sendJson(res, 400, { error: 'Ação não reconhecida.' });
+  return jsonResponse(400, { error: 'Ação não reconhecida.' });
 }
