@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Gradiente de Fundo Premium Dark -->
+    <radialGradient id="bgGlow" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#181D26" />
+      <stop offset="60%" stop-color="#0B0D12" />
+      <stop offset="100%" stop-color="#050709" />
+    </radialGradient>
+
+    <!-- Gradientes Neon de Alta Performance -->
+    <linearGradient id="limeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E4FF38" />
+      <stop offset="50%" stop-color="#C3F75A" />
+      <stop offset="100%" stop-color="#72B814" />
+    </linearGradient>
+
+    <linearGradient id="magentaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF52A8" />
+      <stop offset="50%" stop-color="#FF2E93" />
+      <stop offset="100%" stop-color="#B30F5B" />
+    </linearGradient>
+
+    <linearGradient id="bridgeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#C3F75A" />
+      <stop offset="50%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#FF2E93" />
+    </linearGradient>
+
+    <!-- Brilho Neon Sutil -->
+    <filter id="neonLime" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#C3F75A" flood-opacity="0.5" />
+    </filter>
+    <filter id="neonMagenta" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#FF2E93" flood-opacity="0.5" />
+    </filter>
+    <filter id="cardGlow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" floodColor="#000000" flood-opacity="0.75" />
+    </filter>
+  </defs>
+
+  <!-- Fundo Squircle / Superelipse Suave -->
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#bgGlow)" filter="url(#cardGlow)" />
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="none" stroke="#252C37" stroke-width="3" />
+  <rect x="26" y="26" width="460" height="460" rx="106" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" />
+
+  <!-- Detalhe Atmosférico Sutil: Anel de Conexão do Casal -->
+  <circle cx="256" cy="256" r="168" fill="none" stroke="url(#bridgeGrad)" stroke-width="1.5" stroke-dasharray="8 12" opacity="0.25" />
+
+  <!-- SÍMBOLO MONOGRAMA HF GEOMÉTRICO -->
+  <g transform="translate(256, 256) scale(1)">
+    <!-- COLUNA ESQUERDA DO 'H' (Identidade Rangel: Força & Cyber Lime) -->
+    <!-- Coluna estilizada chanfrada com terminação de velocidade 45° -->
+    <path d="M -104 -115 
+             L -62 -115 
+             L -62 115 
+             L -104 115 
+             Z" 
+          fill="url(#limeGrad)" 
+          filter="url(#neonLime)" />
+
+    <!-- Barra Superior de Halter / Hexágono Chanfrado Esquerda -->
+    <path d="M -122 -95 L -104 -115 L -62 -115 L -44 -95 L -44 -75 L -62 -55 L -104 -55 L -122 -75 Z"
+          fill="url(#limeGrad)" opacity="0.3" />
+
+    <!-- COLUNA DIREITA DO 'H' e CORPO DO 'F' (Identidade Geicsania: Ritmo & Electric Magenta) -->
+    <path d="M 6 -115 
+             L 48 -115 
+             L 48 115 
+             L 6 115 
+             Z" 
+          fill="url(#magentaGrad)" 
+          filter="url(#neonMagenta)" />
+
+    <!-- BRAÇO SUPERIOR DO 'F' (Aceleração e Velocidade) -->
+    <path d="M 48 -115 
+             L 118 -115 
+             L 100 -75 
+             L 48 -75 
+             Z" 
+          fill="url(#magentaGrad)" />
+
+    <!-- BRAÇO MÉDIO DO 'F' (Extensão de Movimento) -->
+    <path d="M 48 -20 
+             L 94 -20 
+             L 80 18 
+             L 48 18 
+             Z" 
+          fill="url(#magentaGrad)" />
+
+    <!-- BARRA CONECTORA CENTRAL (A Conexão do Casal / Pulso Cardíaco & Halter) -->
+    <!-- Liga a coluna esquerda verde à coluna direita magenta através de um pulso dinâmico -->
+    <path d="M -62 -18 
+             L -20 -18 
+             L -6 -48 
+             L 6 12 
+             L 18 -18 
+             L 48 -18 
+             L 48 18 
+             L 26 18 
+             L 6 42 
+             L -6 -18 
+             L -20 18 
+             L -62 18 
+             Z" 
+          fill="url(#bridgeGrad)" />
+
+    <!-- Núcleo Central de Conexão: Ponto Cardíaco / Foco de Alta Energia -->
+    <circle cx="0" cy="0" r="7" fill="#FFFFFF" />
+    <circle cx="0" cy="0" r="14" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.6" />
+  </g>
+</svg>

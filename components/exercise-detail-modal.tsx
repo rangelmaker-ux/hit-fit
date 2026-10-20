@@ -20,13 +20,15 @@ interface ExerciseDetailModalProps {
   accentColor?: string;
   onClose: () => void;
   onStartExercise?: () => void;
+  onSwapExercise?: (targetAltName: string) => void;
 }
 
 export function ExerciseDetailModal({
   exercise,
   accentColor = '#c3f75a',
   onClose,
-  onStartExercise
+  onStartExercise,
+  onSwapExercise
 }: ExerciseDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'visual' | 'machines' | 'posture'>('visual');
 
@@ -191,7 +193,7 @@ export function ExerciseDetailModal({
               {exercise.machines.alternatives.map((alt, i) => (
                 <div 
                   key={i}
-                  className="p-3.5 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-1 hover:border-white/20 transition-colors"
+                  className="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-2 hover:border-white/20 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-white">{alt.name}</h4>
@@ -200,6 +202,18 @@ export function ExerciseDetailModal({
                   <p className="text-xs text-neutral-400 leading-relaxed">
                     {alt.description}
                   </p>
+                  {onSwapExercise && (
+                    <button
+                      onClick={() => {
+                        onSwapExercise(alt.name);
+                        onClose();
+                      }}
+                      className="mt-1 py-1.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white flex items-center justify-center gap-1.5 transition-colors self-start border border-white/10"
+                    >
+                      <Sparkles size={12} style={{ color: accentColor }} />
+                      <span>Trocar Exercício por este</span>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

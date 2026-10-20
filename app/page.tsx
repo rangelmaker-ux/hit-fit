@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useSyncExternalStore } from 'react';
-import { WORKOUT_DAYS, Exercise } from '@/lib/workout-data';
+import { WORKOUT_DAYS, Exercise, DayWorkout } from '@/lib/workout-data';
 import { ExerciseDetailModal } from '@/components/exercise-detail-modal';
 import { NutritionView } from '@/components/nutrition-view';
+import { DuoView } from '@/components/duo-view';
+import { EvolutionView } from '@/components/evolution-view';
 import {
   Dumbbell,
   Check,
@@ -11,13 +13,14 @@ import {
   Pause,
   Flame,
   Settings2,
-  BarChart3,
   Utensils,
   Watch,
   Heart,
   Sparkles,
   Layers,
-  Zap
+  Zap,
+  TrendingUp,
+  UsersRound
 } from 'lucide-react';
 
 interface CoupleSetup {
@@ -52,7 +55,7 @@ function getInitialConfig(): CoupleSetup {
         if (parsed.people && parsed.people.length > 0) return parsed;
       }
     } catch {
-      // Ignora erro
+      // Fallback seguro
     }
   }
   return {
@@ -70,7 +73,7 @@ function getInitialProfile(): string {
       const stored = localStorage.getItem('hitfit-active-profile-v2');
       if (stored) return stored;
     } catch {
-      // Ignora erro
+      // Fallback seguro
     }
   }
   return 'person-rangel';
@@ -82,7 +85,7 @@ function getInitialSavedSets(): Record<string, SavedSetState> {
       const stored = localStorage.getItem('hitfit-progress-v2');
       if (stored) return JSON.parse(stored);
     } catch {
-      // Ignora erro
+      // Fallback seguro
     }
   }
   return {};
@@ -94,10 +97,22 @@ function getInitialWatchCalories(): number {
       const stored = localStorage.getItem('hitfit-watch-cals-v2');
       if (stored) return Number(stored) || 420;
     } catch {
-      // Ignora erro
+      // Fallback seguro
     }
   }
   return 420;
+}
+
+function getInitialWorkouts(): DayWorkout[] {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('hitfit-custom-workouts-v2');
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // Fallback seguro
+    }
+  }
+  return WORKOUT_DAYS;
 }
 
 export default function Home() {
@@ -108,14 +123,19 @@ export default function Home() {
   const [firstName, setFirstName] = useState(() => config.people[0]?.name || 'Rangel');
   const [secondName, setSecondName] = useState(() => config.people[1]?.name || 'Geicsania');
 
-  // Estado do Treino e Navegação inicializados de forma pura
+  // Estado do Treino e Navegação
   const [dayIndex, setDayIndex] = useState<number>(getInitialDayIndex);
-  const [viewTab, setViewTab] = useState<'treino' | 'nutricao' | 'evolucao'>('treino');
+  const [viewTab, setViewTab] = useState<'treino' | 'nutricao' | 'evolucao' | 'duo'>('treino');
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+
+  // Ficha de Treinos (permite substituição inteligente de máquinas)
+  const [workouts, setWorkouts] = useState<DayWorkout[]>(getInitialWorkouts);
 
   // Checklist de Séries e Cargas (salvo por chave semana:perfil:dia:exercicio:serie)
   const [savedSets, setSavedSets] = useState<Record<string, SavedSetState>>(getInitialSavedSets);
   const [currentWeek] = useState<string>(getInitialWeek);
+
+  // Detecção PWA de montagem segura (zero cascading renders)
   const isClient = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -146,10 +166,11 @@ export default function Home() {
       localStorage.setItem('hitfit-active-profile-v2', profile);
       localStorage.setItem('hitfit-progress-v2', JSON.stringify(savedSets));
       localStorage.setItem('hitfit-watch-cals-v2', watchCalories.toString());
+      localStorage.setItem('hitfit-custom-workouts-v2', JSON.stringify(workouts));
     } catch {
       // Ignora falhas de quota de storage
     }
-  }, [config, profile, savedSets, watchCalories, isClient]);
+  }, [config, profile, savedSets, watchCalories, workouts, isClient]);
 
   // Cronômetro da Sessão de Treino
   useEffect(() => {
@@ -179,16 +200,23 @@ export default function Home() {
   // Perfil Ativo e Cores Dinâmicas
   const currentPerson = config.people.find((p) => p.id === profile) || config.people[0];
   const isGeicsania = currentPerson.name.toLowerCase().includes('geic');
-  // Cyber Lime (#c3f75a) para Rangel, Electric Magenta (#ff2e93) para Geicsania
+  // Cyber Volt Lime (#c3f75a) para Rangel, Electric Magenta (#ff2e93) para Geicsania
   const accentColor = isGeicsania ? '#ff2e93' : '#c3f75a';
   const accentGlow = isGeicsania ? 'rgba(255, 46, 147, 0.25)' : 'rgba(195, 247, 90, 0.25)';
 
   // Treino do Dia Atual
-  const todayWorkout = WORKOUT_DAYS[dayIndex];
+  const todayWorkout = workouts[dayIndex] || WORKOUT_DAYS[dayIndex];
 
   // Chave estável para persistência de séries
   const getSetKey = (dayIdx: number, exerciseId: string, setIdx: number) =>
     `${currentWeek}:${profile}:${dayIdx}:${exerciseId}:${setIdx}`;
+
+  const startRest = useCallback((seconds: number) => {
+    setRestSeconds(seconds);
+    const targetEnd = Date.now() + seconds * 1000;
+    setRestEndTime(targetEnd);
+    setRestActive(true);
+  }, []);
 
   const toggleSet = (exerciseId: string, setIdx: number) => {
     const key = getSetKey(dayIndex, exerciseId, setIdx);
@@ -199,7 +227,7 @@ export default function Home() {
         [key]: { ...current, done: !current.done }
       };
     });
-    // Inicia descanso automático de 60s ao concluir uma série
+    // Dispara descanso com cadência de 60 segundos
     startRest(60);
   };
 
@@ -214,12 +242,33 @@ export default function Home() {
     });
   };
 
-  const startRest = useCallback((seconds: number) => {
-    setRestSeconds(seconds);
-    const targetEnd = Date.now() + seconds * 1000;
-    setRestEndTime(targetEnd);
-    setRestActive(true);
-  }, []);
+  // Substituição inteligente de máquina/exercício na ficha
+  const handleSwapExercise = (altName: string) => {
+    if (!selectedExercise) return;
+    setWorkouts((prev) =>
+      prev.map((day, dIdx) => {
+        if (dIdx !== dayIndex) return day;
+        return {
+          ...day,
+          exercises: day.exercises.map((ex) => {
+            if (ex.id !== selectedExercise.id) return ex;
+            return {
+              ...ex,
+              name: altName,
+              machines: {
+                ...ex.machines,
+                primary: {
+                  name: altName,
+                  description: 'Aparelho substituto selecionado para o treino de hoje.',
+                  settingTips: ex.machines.primary.settingTips
+                }
+              }
+            };
+          })
+        };
+      })
+    );
+  };
 
   // Cálculo do progresso no dia
   const totalSetsToday = todayWorkout.exercises.reduce((sum, ex) => sum + ex.sets, 0);
@@ -248,11 +297,10 @@ export default function Home() {
         setBleDeviceName(device.name || 'Monitor Cardíaco BLE');
         setBleConnected(true);
       } catch {
-        // Usuário cancelou ou não há suporte no navegador atual
-        alert('Para pareamento BLE nativo, use Google Chrome ou Edge no Android/PC.');
+        alert('Para pareamento BLE nativo, utilize Google Chrome ou Edge no Android/PC.');
       }
     } else {
-      alert('Seu navegador atual não suporta Web Bluetooth. Você pode digitar os dados do seu relógio manualmente!');
+      alert('Seu navegador atual não suporta Web Bluetooth nativo. Registre os dados marcados no seu relógio no campo abaixo!');
     }
   };
 
@@ -264,21 +312,21 @@ export default function Home() {
 
   if (!isClient) {
     return (
-      <main className="min-h-screen bg-[#090b09] text-white flex items-center justify-center p-4">
+      <main className="min-h-screen bg-[#070908] text-white flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-3">
           <Dumbbell className="w-8 h-8 text-[#c3f75a] animate-spin" />
-          <p className="text-sm font-semibold text-neutral-400">Carregando treino do casal…</p>
+          <p className="text-sm font-semibold text-neutral-400">Carregando Hit-Fit Duo…</p>
         </div>
       </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#070908] text-neutral-100 flex flex-col items-center selection:bg-[#c3f75a]/30">
-      <div className="w-full max-w-lg min-h-screen flex flex-col px-4 pt-4 pb-36">
+    <div className="min-h-screen bg-[#070908] text-neutral-100 flex flex-col items-center overflow-x-hidden selection:bg-[#c3f75a]/30">
+      <div className="w-full max-w-lg min-h-screen flex flex-col px-4 pt-3 pb-36">
         
-        {/* TOPO: LOGO E CONFIGURAÇÕES */}
-        <header className="flex items-center justify-between py-2 border-b border-white/5 mb-3">
+        {/* HEADER: IDENTIDADE VISUAL HF DUO & SENSORS */}
+        <header className="flex items-center justify-between py-2.5 border-b border-white/5 mb-3">
           <div className="flex items-center gap-2.5">
             <div 
               className="w-10 h-10 rounded-2xl flex items-center justify-center font-black shadow-lg border"
@@ -296,14 +344,14 @@ export default function Home() {
                 <span style={{ color: accentColor }}>-</span>
                 <span>FIT</span>
                 <span 
-                  className="text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase ml-1 tracking-wider"
+                  className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase ml-1 tracking-wider"
                   style={{ backgroundColor: `${accentColor}25`, color: accentColor }}
                 >
                   DUO
                 </span>
               </div>
               <p className="text-[10px] tracking-widest text-neutral-400 uppercase font-semibold">
-                Treino para Casal · Academia
+                Treino de Casal · Academia
               </p>
             </div>
           </div>
@@ -312,27 +360,27 @@ export default function Home() {
             {/* Botão Sincronizar Relógio Inteligente */}
             <button
               onClick={() => setWatchModalOpen(true)}
-              className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 transition-colors flex items-center gap-1.5"
-              aria-label="Dados do Relógio"
+              className="p-2 px-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 transition-colors flex items-center gap-1.5"
+              aria-label="Registrar Dados do Relógio"
             >
-              <Watch size={18} style={{ color: bleConnected ? accentColor : '#94a3b8' }} />
+              <Watch size={17} style={{ color: bleConnected ? accentColor : '#94a3b8' }} />
               <span className="text-[11px] font-bold font-mono">{watchCalories} kcal</span>
             </button>
 
-            {/* Botão de Edição dos Perfis */}
+            {/* Configuração de Perfis */}
             <button
               onClick={() => setEditingConfig(!editingConfig)}
               className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 transition-colors"
-              aria-label="Configurar Perfis"
+              aria-label="Configurar Nomes do Casal"
             >
               <Settings2 size={18} />
             </button>
           </div>
         </header>
 
-        {/* MODAL / FORMULÁRIO DE EDIÇÃO DOS NOMES DO CASAL */}
+        {/* MODAL / FORMULÁRIO DE EDIÇÃO DOS NOMES */}
         {editingConfig && (
-          <div className="mb-4 p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-3 animate-in fade-in">
+          <div className="mb-4 p-4 rounded-3xl bg-white/5 border border-white/10 flex flex-col gap-3 animate-in fade-in">
             <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
               Nomes de Quem Treina Juntos:
             </span>
@@ -342,14 +390,14 @@ export default function Home() {
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="Nome dele"
-                className="p-2.5 bg-black/50 border border-white/15 rounded-xl text-white font-bold"
+                className="p-3 bg-black/50 border border-white/15 rounded-2xl text-white font-bold text-base"
               />
               <input
                 type="text"
                 value={secondName}
                 onChange={(e) => setSecondName(e.target.value)}
                 placeholder="Nome dela"
-                className="p-2.5 bg-black/50 border border-white/15 rounded-xl text-white font-bold"
+                className="p-3 bg-black/50 border border-white/15 rounded-2xl text-white font-bold text-base"
               />
             </div>
             <button
@@ -363,7 +411,7 @@ export default function Home() {
                 });
                 setEditingConfig(false);
               }}
-              className="py-2.5 px-4 rounded-xl font-bold text-xs shadow-md transition-transform active:scale-95 text-[#10150d]"
+              className="py-3 px-4 rounded-2xl font-bold text-xs shadow-md transition-transform active:scale-95 text-[#10150d]"
               style={{ backgroundColor: accentColor }}
             >
               Salvar Nomes
@@ -371,7 +419,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* SELETOR RÁPIDO DO PERFIL ATIVO (RANGEL vs GEICSANIA) */}
+        {/* SELETOR DE PERFIL (RANGEL vs GEICSANIA) */}
         <div className="flex items-center gap-2 mb-4 p-1 rounded-2xl bg-white/5 border border-white/10">
           {config.people.map((p) => {
             const isSelected = profile === p.id;
@@ -420,59 +468,31 @@ export default function Home() {
           />
         )}
 
-        {/* ======================= ABA DE EVOLUÇÃO ======================= */}
+        {/* ======================= ABA DE EVOLUÇÃO / CARGAS ======================= */}
         {viewTab === 'evolucao' && (
-          <div className="flex flex-col gap-4 animate-in fade-in pb-20">
-            <div className="p-5 rounded-3xl bg-white/5 border border-white/10 flex flex-col gap-3">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">
-                Consistência Semanal do Casal
-              </span>
-              <h3 className="text-xl font-black text-white">
-                Semana em Andamento ({currentWeek})
-              </h3>
-              <p className="text-xs text-neutral-400">
-                Acompanhe quantas séries cada um já completou nos 5 dias de treino:
-              </p>
+          <EvolutionView
+            profileId={profile}
+            profileName={currentPerson.name}
+            currentWeek={currentWeek}
+            savedSets={savedSets}
+            accentColor={accentColor}
+          />
+        )}
 
-              <div className="flex flex-col gap-3 pt-2">
-                {config.people.map((p) => {
-                  const isGeic = p.name.toLowerCase().includes('geic');
-                  const pColor = isGeic ? '#ff2e93' : '#c3f75a';
-
-                  // Conta total de séries feitas por esse perfil
-                  const totalDone = Object.keys(savedSets).filter(
-                    (k) => k.startsWith(`${currentWeek}:${p.id}`) && savedSets[k]?.done
-                  ).length;
-
-                  return (
-                    <div key={p.id} className="p-3.5 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black"
-                          style={{ backgroundColor: pColor, color: '#10150d' }}
-                        >
-                          {p.name[0]}
-                        </span>
-                        <div>
-                          <strong className="text-sm text-white block">{p.name}</strong>
-                          <span className="text-[11px] text-neutral-400">{totalDone} séries concluídas</span>
-                        </div>
-                      </div>
-                      <span className="text-sm font-black font-mono" style={{ color: pColor }}>
-                        {totalDone} pts
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+        {/* ======================= ABA DUO (CASAL) ======================= */}
+        {viewTab === 'duo' && (
+          <DuoView
+            people={config.people}
+            currentWeek={currentWeek}
+            savedSets={savedSets}
+            accentColor={accentColor}
+          />
         )}
 
         {/* ======================= ABA DE TREINO ======================= */}
         {viewTab === 'treino' && (
           <div className="flex flex-col gap-4 animate-in fade-in">
-            {/* SELETOR DOS 5 DIAS DA SEMANA (SEG A SEX) */}
+            {/* SELETOR DOS 5 DIAS DA SEMANA */}
             <div className="grid grid-cols-5 gap-1.5 p-1 bg-white/5 rounded-2xl border border-white/10">
               {WORKOUT_DAYS.map((w, idx) => {
                 const isActive = dayIndex === idx;
@@ -501,7 +521,7 @@ export default function Home() {
               })}
             </div>
 
-            {/* CARD DO TREINO DO DIA (HERO BANNER) */}
+            {/* CARD HERO DO TREINO DO DIA */}
             <div
               className="p-5 rounded-3xl border relative overflow-hidden flex flex-col gap-3 shadow-xl"
               style={{
@@ -547,10 +567,10 @@ export default function Home() {
               </div>
             </div>
 
-            {/* CARD DO FINALIZADOR METABÓLICO (CARDIO / HIIT DO DIA) */}
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3">
+            {/* CARD DO CARDIO FINALIZADOR */}
+            <div className="p-4 rounded-3xl bg-white/5 border border-white/10 flex items-start gap-3">
               <div 
-                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 mt-0.5"
                 style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
               >
                 <Flame size={20} />
@@ -573,7 +593,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* TÍTULO DA SEÇÃO DE EXERCÍCIOS */}
+            {/* LISTA DE EXERCÍCIOS */}
             <div className="flex items-center justify-between px-1 pt-1">
               <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
                 <Dumbbell size={15} style={{ color: accentColor }} />
@@ -582,15 +602,13 @@ export default function Home() {
               <span className="text-[11px] text-neutral-500">Toque para ver a máquina</span>
             </div>
 
-            {/* LISTA COMPLETA DOS EXERCÍCIOS COM CHECKLIST E GUIA DE MÁQUINA */}
             <div className="flex flex-col gap-3">
               {todayWorkout.exercises.map((exercise, eIdx) => {
                 return (
                   <article
                     key={exercise.id}
-                    className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-3 hover:border-white/20 transition-all shadow-md"
+                    className="p-4 rounded-3xl bg-white/5 border border-white/10 flex flex-col gap-3 hover:border-white/20 transition-all shadow-md"
                   >
-                    {/* Linha Superior: Nome do Exercício + Botão de Abrir Guia Biomecânico */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
@@ -612,7 +630,6 @@ export default function Home() {
                         </p>
                       </div>
 
-                      {/* Botão de abrir modal biomecânico */}
                       <button
                         onClick={() => setSelectedExercise(exercise)}
                         className="py-1.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white flex items-center gap-1.5 transition-colors border border-white/10"
@@ -623,8 +640,7 @@ export default function Home() {
                       </button>
                     </div>
 
-                    {/* MÁQUINA PRINCIPAL EM DESTAQUE NO PRÓPRIO CARD */}
-                    <div className="text-[11px] text-neutral-300 bg-black/40 p-2.5 rounded-xl border border-white/5 flex items-center justify-between">
+                    <div className="text-[11px] text-neutral-300 bg-black/40 p-2.5 rounded-2xl border border-white/5 flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-neutral-400">
                         <Layers size={13} style={{ color: accentColor }} />
                         Aparelho:
@@ -634,10 +650,10 @@ export default function Home() {
                       </strong>
                     </div>
 
-                    {/* SÉRIES E REGISTRO DE CARGAS */}
+                    {/* SÉRIES E CARGAS */}
                     <div className="flex flex-col gap-2 pt-1 border-t border-white/5">
                       <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
-                        Séries de {currentPerson.name} (Marque ao terminar):
+                        Séries de {currentPerson.name}:
                       </span>
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {Array.from({ length: exercise.sets }).map((_, sIdx) => {
@@ -647,7 +663,7 @@ export default function Home() {
                           return (
                             <div
                               key={sIdx}
-                              className={`p-2 rounded-xl border flex flex-col gap-1 transition-all ${
+                              className={`p-2 rounded-2xl border flex flex-col gap-1 transition-all ${
                                 state.done
                                   ? 'bg-[#152010] border-emerald-500/50 text-white'
                                   : 'bg-black/30 border-white/10 text-neutral-400'
@@ -668,14 +684,13 @@ export default function Home() {
                                 </button>
                               </div>
 
-                              {/* Input de carga rápida */}
                               <div className="flex items-center gap-1 mt-0.5">
                                 <input
                                   type="text"
                                   placeholder="kg"
                                   value={state.weightKg || ''}
                                   onChange={(e) => updateSetWeight(exercise.id, sIdx, e.target.value)}
-                                  className="w-full text-[11px] font-mono bg-transparent border-0 border-b border-white/20 focus:border-white p-0 text-white outline-none"
+                                  className="w-full text-base font-mono bg-transparent border-0 border-b border-white/20 focus:border-white p-0 text-white outline-none"
                                 />
                                 <span className="text-[9px] text-neutral-500">kg</span>
                               </div>
@@ -697,9 +712,8 @@ export default function Home() {
       <footer className="fixed bottom-0 left-0 right-0 z-40 flex justify-center bg-[#070908]/95 backdrop-blur-xl border-t border-white/10 py-2.5 px-4">
         <div className="w-full max-w-lg flex flex-col gap-2">
           
-          {/* BARRA DE SESSÃO ATIVA & DESCANSO */}
+          {/* BARRA DE CRONÔMETRO GERAL & DESCANSO */}
           <div className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-white/5 border border-white/10 shadow-xl">
-            {/* Cronômetro Geral do Treino com Play/Pause */}
             <div className="flex items-center gap-2.5">
               <button
                 onClick={() => setWorkoutActive(!workoutActive)}
@@ -719,7 +733,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Cronômetro de Descanso entre Séries */}
             <div className="flex items-center gap-2 pl-3 border-l border-white/10">
               <div>
                 <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block text-right">
@@ -743,7 +756,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* NAVEGAÇÃO ENTRE ABAS DO APP */}
+          {/* NAVEGAÇÃO ENTRE AS 4 TELAS PRINCIPAIS */}
           <nav className="flex items-center justify-around pt-1">
             <button
               onClick={() => setViewTab('treino')}
@@ -762,7 +775,7 @@ export default function Home() {
               }`}
             >
               <Utensils size={18} style={viewTab === 'nutricao' ? { color: accentColor } : {}} />
-              <span>Nutrição & Peso</span>
+              <span>Nutrição</span>
             </button>
 
             <button
@@ -771,8 +784,18 @@ export default function Home() {
                 viewTab === 'evolucao' ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
               }`}
             >
-              <BarChart3 size={18} style={viewTab === 'evolucao' ? { color: accentColor } : {}} />
-              <span>Evolução</span>
+              <TrendingUp size={18} style={viewTab === 'evolucao' ? { color: accentColor } : {}} />
+              <span>Cargas</span>
+            </button>
+
+            <button
+              onClick={() => setViewTab('duo')}
+              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
+                viewTab === 'duo' ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
+              }`}
+            >
+              <UsersRound size={18} style={viewTab === 'duo' ? { color: accentColor } : {}} />
+              <span>Duo Casal</span>
             </button>
           </nav>
         </div>
@@ -784,6 +807,7 @@ export default function Home() {
           exercise={selectedExercise}
           accentColor={accentColor}
           onClose={() => setSelectedExercise(null)}
+          onSwapExercise={handleSwapExercise}
         />
       )}
 
@@ -811,19 +835,19 @@ export default function Home() {
             </div>
 
             <p className="text-xs text-neutral-400 leading-relaxed">
-              Registre os dados marcados no seu Apple Watch ou Galaxy Watch para calcular o déficit calórico real:
+              Registre a estimativa exibida no Apple Watch ou Galaxy Watch para ajustar o balanço energético do dia:
             </p>
 
             <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1 text-xs">
                 <span className="text-neutral-400 flex items-center gap-1">
-                  <Flame size={14} className="text-amber-400" /> Calorias Queimadas no Treino:
+                  <Flame size={14} className="text-amber-400" /> Calorias do Treino (Estimativa do Relógio):
                 </span>
                 <input
                   type="number"
                   value={watchCalories}
                   onChange={(e) => setWatchCalories(Number(e.target.value) || 0)}
-                  className="p-3 bg-black/50 border border-white/15 rounded-xl text-lg font-black font-mono text-white"
+                  className="p-3 bg-black/50 border border-white/15 rounded-2xl text-xl font-black font-mono text-white"
                   placeholder="Ex: 480"
                 />
               </label>
@@ -836,37 +860,36 @@ export default function Home() {
                   type="number"
                   value={watchHeartRate}
                   onChange={(e) => setWatchHeartRate(Number(e.target.value) || 0)}
-                  className="p-3 bg-black/50 border border-white/15 rounded-xl text-lg font-black font-mono text-white"
-                  placeholder="Ex: 138"
+                  className="p-3 bg-black/50 border border-white/15 rounded-2xl text-xl font-black font-mono text-white"
+                  placeholder="Ex: 135"
                 />
               </label>
             </div>
 
-            {/* Conexão via Web Bluetooth API */}
-            <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-2">
+            <div className="p-3 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-2">
               <span className="text-[11px] font-bold text-neutral-300 flex items-center gap-1.5">
                 <Zap size={14} style={{ color: accentColor }} />
                 Sensor Cardíaco Bluetooth (BLE)
               </span>
               <p className="text-[11px] text-neutral-400">
                 {bleConnected
-                  ? `Conectado a: ${bleDeviceName}`
-                  : 'Pareie cintas ou braceletes esportivos BLE direto no app.'}
+                  ? `Conectado: ${bleDeviceName}`
+                  : 'Suporte a cintas e braceletes cardíacos BLE padrão.'}
               </p>
               <button
                 onClick={connectBluetoothWatch}
-                className="py-2 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
+                className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
               >
-                {bleConnected ? 'Sensor Conectado ✓' : 'Conectar Sensor BLE'}
+                {bleConnected ? 'Sensor Pareado ✓' : 'Conectar Sensor BLE'}
               </button>
             </div>
 
             <button
               onClick={() => setWatchModalOpen(false)}
-              className="py-3 rounded-xl font-bold text-xs shadow-md transition-transform active:scale-95 text-[#10150d]"
+              className="py-3.5 rounded-2xl font-bold text-xs shadow-md transition-transform active:scale-95 text-[#10150d]"
               style={{ backgroundColor: accentColor }}
             >
-              Salvar Dados do Treino
+              Salvar Dados da Sessão
             </button>
           </div>
         </div>

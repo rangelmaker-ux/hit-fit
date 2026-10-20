@@ -1,0 +1,40 @@
+{
+  "name": "Hit-Fit Duo Pro",
+  "short_name": "Hit-Fit",
+  "description": "Aplicativo de alta performance para treino de academia em casal com biomecânica, controle de cargas e déficit calórico.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#070908",
+  "theme_color": "#070908",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "pt-BR",
+  "categories": ["fitness", "health", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
