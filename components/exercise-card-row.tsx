@@ -3,6 +3,7 @@
 import React from 'react';
 import { Exercise } from '@/lib/workout-data';
 import { Sparkles, Layers, Check, Plus, Minus, ArrowRight } from 'lucide-react';
+import { NumericInput } from '@/components/ui/numeric-input';
 
 interface ExerciseCardRowProps {
   exercise: Exercise;
@@ -33,9 +34,11 @@ export function ExerciseCardRow({
 
   const handleAdjustWeight = (setIdx: number, delta: number) => {
     const key = getSetKey(dayIndex, exercise.id, setIdx);
-    const current = parseFloat(savedSets[key]?.weightKg || '0');
-    const nextVal = Math.max(0, current + delta);
-    onUpdateSetWeight(exercise.id, setIdx, nextVal.toString());
+    const raw = (savedSets[key]?.weightKg || '').replace(',', '.');
+    const current = parseFloat(raw);
+    const base = isNaN(current) ? 0 : current;
+    const nextVal = Math.max(0, Math.round((base + delta) * 10) / 10);
+    onUpdateSetWeight(exercise.id, setIdx, nextVal === 0 ? '' : nextVal.toString());
   };
 
   return (
@@ -159,11 +162,11 @@ export function ExerciseCardRow({
                     </button>
 
                     <div className="flex items-center justify-center gap-0.5 flex-1 min-w-0">
-                      <input
-                        type="text"
-                        placeholder="0"
-                        value={state.weightKg || ''}
-                        onChange={(e) => onUpdateSetWeight(exercise.id, sIdx, e.target.value)}
+                      <NumericInput
+                        value={state.weightKg}
+                        allowDecimals={true}
+                        placeholder=""
+                        onChangeValue={(_val, text) => onUpdateSetWeight(exercise.id, sIdx, text)}
                         className="w-10 text-center text-base font-mono font-bold bg-transparent text-white outline-none p-0"
                       />
                       <span className="text-[10px] font-mono text-neutral-400">kg</span>

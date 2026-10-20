@@ -3,16 +3,18 @@
 import React, { useEffect, useState, useCallback, useSyncExternalStore } from 'react';
 import { WORKOUT_DAYS, Exercise, DayWorkout } from '@/lib/workout-data';
 import { ExerciseDetailModal } from '@/components/exercise-detail-modal';
-import { NutritionView } from '@/components/nutrition-view';
-import { DuoView } from '@/components/duo-view';
+import { HealthHubView, HealthSubTab } from '@/components/health-hub-view';
 import { EvolutionView } from '@/components/evolution-view';
+import { ProfileView } from '@/components/profile-view';
+import { HomeSummaryView } from '@/components/home-summary-view';
 import { AthleteSwitcher } from '@/components/athlete-switcher';
 import { KineticWeekRibbon } from '@/components/kinetic-week-ribbon';
 import { HeroWorkoutCard } from '@/components/hero-workout-card';
 import { ExerciseCardRow } from '@/components/exercise-card-row';
-import { WorkoutCockpit } from '@/components/workout-cockpit';
+import { WorkoutCockpit, MainTabType } from '@/components/workout-cockpit';
 import { WatchModal } from '@/components/watch-modal';
 import { WorkoutCompletedModal } from '@/components/workout-completed-modal';
+import { getAvatar } from '@/lib/avatar-storage';
 import { Dumbbell, Settings2, Watch, Flame } from 'lucide-react';
 
 interface CoupleSetup {
@@ -99,18 +101,22 @@ function getInitialWorkouts(): DayWorkout[] {
 
 export default function Home() {
   const [config, setConfig] = useState<CoupleSetup>(getInitialConfig);
-  const [profile, setProfile] = useState<string>(getInitialProfile);
+  const [loggedInUserId, setLoggedInUserId] = useState<string>(getInitialProfile);
+  const [activeProfile, setActiveProfile] = useState<string>(getInitialProfile);
   const [editingConfig, setEditingConfig] = useState(false);
   const [firstName, setFirstName] = useState(() => config.people[0]?.name || 'Rangel');
   const [secondName, setSecondName] = useState(() => config.people[1]?.name || 'Geicsania');
 
   const [dayIndex, setDayIndex] = useState<number>(getInitialDayIndex);
-  const [viewTab, setViewTab] = useState<'treino' | 'nutricao' | 'evolucao' | 'duo'>('treino');
+  const [viewTab, setViewTab] = useState<MainTabType>('inicio');
+  const [healthSubTab, setHealthSubTab] = useState<HealthSubTab>('alimentacao');
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
   const [workouts, setWorkouts] = useState<DayWorkout[]>(getInitialWorkouts);
   const [savedSets, setSavedSets] = useState<Record<string, SavedSetState>>(getInitialSavedSets);
   const [currentWeek] = useState<string>(getInitialWeek);
+
+  const [avatars, setAvatars] = useState<Record<string, string | null>>({});
 
   const isClient = useSyncExternalStore(
     () => () => {},
@@ -132,16 +138,29 @@ export default function Home() {
   const [bleConnected, setBleConnected] = useState(false);
   const [bleDeviceName, setBleDeviceName] = useState<string | null>(null);
 
+  // Carrega avatares do IndexedDB
+  const refreshAvatars = useCallback(() => {
+    config.people.forEach((p) => {
+      getAvatar(p.id).then((url) => {
+        setAvatars((prev) => ({ ...prev, [p.id]: url }));
+      });
+    });
+  }, [config.people]);
+
+  useEffect(() => {
+    refreshAvatars();
+  }, [refreshAvatars]);
+
   useEffect(() => {
     if (!isClient) return;
     try {
       localStorage.setItem('hitfit-setup-v2', JSON.stringify(config));
-      localStorage.setItem('hitfit-active-profile-v2', profile);
+      localStorage.setItem('hitfit-active-profile-v2', activeProfile);
       localStorage.setItem('hitfit-progress-v2', JSON.stringify(savedSets));
       localStorage.setItem('hitfit-watch-cals-v2', watchCalories.toString());
       localStorage.setItem('hitfit-custom-workouts-v2', JSON.stringify(workouts));
     } catch {}
-  }, [config, profile, savedSets, watchCalories, workouts, isClient]);
+  }, [config, activeProfile, savedSets, watchCalories, workouts, isClient]);
 
   useEffect(() => {
     if (!workoutActive) return;
@@ -164,15 +183,18 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [restActive, restEndTime]);
 
-  const currentPerson = config.people.find((p) => p.id === profile) || config.people[0];
+  const currentPerson = config.people.find((p) => p.id === activeProfile) || config.people[0];
   const isGeicsania = currentPerson.name.toLowerCase().includes('geic');
   const accentColor = isGeicsania ? '#FF267A' : '#C4F53C';
   const todayWorkout = workouts[dayIndex] || WORKOUT_DAYS[dayIndex];
 
+  // Regra de Permissões: Se o perfil ativo for diferente do usuário logado, entra em modo somente leitura
+  const isReadOnly = activeProfile !== loggedInUserId;
+
   const getSetKey = useCallback(
     (dayIdx: number, exerciseId: string, setIdx: number) =>
-      `${currentWeek}:${profile}:${dayIdx}:${exerciseId}:${setIdx}`,
-    [currentWeek, profile]
+      `${currentWeek}:${activeProfile}:${dayIdx}:${exerciseId}:${setIdx}`,
+    [currentWeek, activeProfile]
   );
 
   const startRest = useCallback((seconds: number) => {
@@ -182,6 +204,7 @@ export default function Home() {
   }, []);
 
   const toggleSet = (exerciseId: string, setIdx: number) => {
+    if (isReadOnly) return;
     const key = getSetKey(dayIndex, exerciseId, setIdx);
     setSavedSets((prev) => {
       const current = prev[key] || { done: false };
@@ -191,6 +214,7 @@ export default function Home() {
   };
 
   const updateSetWeight = (exerciseId: string, setIdx: number, weightKg: string) => {
+    if (isReadOnly) return;
     const key = getSetKey(dayIndex, exerciseId, setIdx);
     setSavedSets((prev) => {
       const current = prev[key] || { done: false };
@@ -199,7 +223,7 @@ export default function Home() {
   };
 
   const handleSwapExercise = (altName: string) => {
-    if (!selectedExercise) return;
+    if (isReadOnly || !selectedExercise) return;
     setWorkouts((prev) =>
       prev.map((day, dIdx) => {
         if (dIdx !== dayIndex) return day;
@@ -261,7 +285,7 @@ export default function Home() {
       caloriesEstimated: watchCalories || Math.round(workoutSeconds * 0.12)
     };
     try {
-      const historyKey = `hitfit-history-${profile}`;
+      const historyKey = `hitfit-history-${activeProfile}`;
       const existing = JSON.parse(localStorage.getItem(historyKey) || '[]');
       existing.unshift(sessionRecord);
       localStorage.setItem(historyKey, JSON.stringify(existing.slice(0, 30)));
@@ -291,6 +315,16 @@ export default function Home() {
       alert('Seu navegador atual não suporta Web Bluetooth nativo. Registre os dados manualmente no campo abaixo!');
     }
   };
+
+  // Leitura de Água e Peso para os Resumos da Home
+  const todayDate = new Date().toISOString().split('T')[0];
+  const waterConsumedToday = isClient
+    ? Number(localStorage.getItem(`hitfit-water-${todayDate}-${activeProfile}`) || 1250)
+    : 1250;
+  const currentWeightToday = isClient
+    ? Number(localStorage.getItem(`hitfit-weight-${activeProfile}`) || (isGeicsania ? 64 : 82))
+    : (isGeicsania ? 64 : 82);
+  const targetWeightToday = isGeicsania ? 58 : 76;
 
   if (!isClient) {
     return (
@@ -368,7 +402,7 @@ export default function Home() {
         {editingConfig && (
           <div className="mb-4 p-4 rounded-3xl bg-[#0E121A] border border-[rgba(255,255,255,0.1)] flex flex-col gap-3 animate-spring-in">
             <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest">
-              Configuração dos Atletas:
+              Configuração dos Atletas & Login do Dispositivo:
             </span>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <input
@@ -386,6 +420,22 @@ export default function Home() {
                 className="p-3 bg-[#07090C] border border-white/10 rounded-2xl text-white font-bold text-base outline-none focus:border-white/30"
               />
             </div>
+
+            <div className="flex items-center justify-between text-xs font-mono text-neutral-400 pt-1">
+              <span>Atleta Logado neste Celular:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextUser = loggedInUserId === 'person-rangel' ? 'person-geicsania' : 'person-rangel';
+                  setLoggedInUserId(nextUser);
+                  setActiveProfile(nextUser);
+                }}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white/10 text-white"
+              >
+                Alternar Titular
+              </button>
+            </div>
+
             <button
               onClick={() => {
                 setConfig({
@@ -405,47 +455,40 @@ export default function Home() {
           </div>
         )}
 
-        {/* MOTORSPORT / COCKPIT ATHLETE SWITCHER */}
+        {/* MOTORSPORT ATHLETE SWITCHER COM FOTOS REAIS */}
         <div className="mb-4">
           <AthleteSwitcher
             people={config.people}
-            activeProfileId={profile}
-            onSelectProfile={setProfile}
+            activeProfileId={activeProfile}
+            onSelectProfile={setActiveProfile}
+            avatars={avatars}
           />
         </div>
 
-        {/* ======================= ABA DE NUTRIÇÃO ======================= */}
-        {viewTab === 'nutricao' && (
-          <NutritionView
-            profileId={profile}
-            profileName={currentPerson.name}
+        {/* ======================= ABA 1: INÍCIO (RESUMO) ======================= */}
+        {viewTab === 'inicio' && (
+          <HomeSummaryView
+            athleteName={currentPerson.name}
+            avatarUrl={avatars[activeProfile] || null}
             accentColor={accentColor}
-            todayWorkoutCaloriesBurned={watchCalories}
+            todayWorkout={todayWorkout}
+            progressPct={progressPct}
+            completedSets={completedSetsToday}
+            totalSets={totalSetsToday}
+            waterConsumedMl={waterConsumedToday}
+            waterGoalMl={Math.round(currentWeightToday * 38)}
+            currentWeightKg={currentWeightToday}
+            targetWeightKg={targetWeightToday}
+            onOpenWorkout={() => setViewTab('treino')}
+            onOpenHealthSubTab={(sub) => {
+              setHealthSubTab(sub);
+              setViewTab('saude');
+            }}
+            onOpenProfile={() => setViewTab('perfil')}
           />
         )}
 
-        {/* ======================= ABA DE EVOLUÇÃO / CARGAS ======================= */}
-        {viewTab === 'evolucao' && (
-          <EvolutionView
-            profileId={profile}
-            profileName={currentPerson.name}
-            currentWeek={currentWeek}
-            savedSets={savedSets}
-            accentColor={accentColor}
-          />
-        )}
-
-        {/* ======================= ABA DUO (CASAL) ======================= */}
-        {viewTab === 'duo' && (
-          <DuoView
-            people={config.people}
-            currentWeek={currentWeek}
-            savedSets={savedSets}
-            accentColor={accentColor}
-          />
-        )}
-
-        {/* ======================= ABA DE TREINO ======================= */}
+        {/* ======================= ABA 2: TREINAR (COCKPIT DE SESSÃO) ======================= */}
         {viewTab === 'treino' && (
           <div className="flex flex-col gap-4 animate-spring-in">
             <KineticWeekRibbon
@@ -465,7 +508,7 @@ export default function Home() {
               accentColor={accentColor}
             />
 
-            {/* CARD METABÓLICO FINALIZADOR (CARDIO HIIT) */}
+            {/* CARD METABÓLICO FINALIZADOR */}
             <div className="p-4 rounded-3xl bg-[#0B0E15] border border-[rgba(245,158,11,0.2)] flex items-start gap-3 shadow-lg relative overflow-hidden">
               <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 shadow-md">
                 <Flame size={20} />
@@ -516,12 +559,53 @@ export default function Home() {
           </div>
         )}
 
+        {/* ======================= ABA 3: SAÚDE & NUTRIÇÃO (HUB) ======================= */}
+        {viewTab === 'saude' && (
+          <HealthHubView
+            profileId={activeProfile}
+            athleteName={currentPerson.name}
+            accentColor={accentColor}
+            todayWorkoutCaloriesBurned={watchCalories}
+            initialSubTab={healthSubTab}
+            currentWeightKg={currentWeightToday}
+            isReadOnly={isReadOnly}
+          />
+        )}
+
+        {/* ======================= ABA 4: EVOLUÇÃO (CARGAS) ======================= */}
+        {viewTab === 'evolucao' && (
+          <EvolutionView
+            profileId={activeProfile}
+            profileName={currentPerson.name}
+            currentWeek={currentWeek}
+            savedSets={savedSets}
+            accentColor={accentColor}
+          />
+        )}
+
+        {/* ======================= ABA 5: PERFIL (FOTOS & BIOMETRIA) ======================= */}
+        {viewTab === 'perfil' && (
+          <ProfileView
+            profileId={activeProfile}
+            athleteName={currentPerson.name}
+            accentColor={accentColor}
+            isReadOnly={isReadOnly}
+            people={config.people}
+            currentWeek={currentWeek}
+            savedSets={savedSets}
+            onAvatarUpdated={refreshAvatars}
+          />
+        )}
+
       </div>
 
       <WorkoutCockpit
         workoutActive={workoutActive}
         workoutSeconds={workoutSeconds}
-        onToggleWorkout={() => setWorkoutActive(!workoutActive)}
+        onToggleWorkout={() => {
+          if (isReadOnly) return;
+          setWorkoutActive(!workoutActive);
+        }}
         restActive={restActive}
         restSeconds={restSeconds}
         onStartRest={startRest}

@@ -6,12 +6,14 @@ interface AthleteSwitcherProps {
   people: { id: string; name: string }[];
   activeProfileId: string;
   onSelectProfile: (id: string) => void;
+  avatars?: Record<string, string | null>;
 }
 
 export function AthleteSwitcher({
   people,
   activeProfileId,
-  onSelectProfile
+  onSelectProfile,
+  avatars = {}
 }: AthleteSwitcherProps) {
   return (
     <div className="relative w-full p-1 rounded-2xl bg-[#0E121A] border border-[rgba(255,255,255,0.07)] shadow-2xl flex items-center gap-1.5">
@@ -48,9 +50,9 @@ export function AthleteSwitcher({
               />
             )}
 
-            {/* Avatar Esculpido */}
+            {/* Avatar Esculpido ou Foto Real */}
             <div
-              className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${
+              className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 overflow-hidden transition-all ${
                 isSelected
                   ? 'shadow-md scale-105'
                   : 'bg-white/5 text-neutral-400'
@@ -65,7 +67,16 @@ export function AthleteSwitcher({
                   : undefined
               }
             >
-              {p.name[0]}
+              {avatars[p.id] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatars[p.id] || ''}
+                  alt={p.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                p.name[0]
+              )}
             </div>
 
             {/* Nome e Micro-Telemetria */}

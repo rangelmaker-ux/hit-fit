@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Watch, Flame, Heart, Zap } from 'lucide-react';
+import { NumericInput } from '@/components/ui/numeric-input';
 
 interface WatchModalProps {
   isOpen: boolean;
@@ -67,10 +68,10 @@ export function WatchModal({
             <span className="text-neutral-400 flex items-center gap-1 font-mono">
               <Flame size={14} className="text-amber-400" /> Calorias do Treino (Estimativa do Relógio):
             </span>
-            <input
-              type="number"
+            <NumericInput
               value={watchCalories}
-              onChange={(e) => onUpdateCalories(Number(e.target.value) || 0)}
+              allowDecimals={false}
+              onChangeValue={(val) => onUpdateCalories(val || 0)}
               className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-xl font-black font-mono text-white outline-none focus:border-white/30"
               placeholder="Ex: 480"
             />
@@ -80,10 +81,10 @@ export function WatchModal({
             <span className="text-neutral-400 flex items-center gap-1 font-mono">
               <Heart size={14} className="text-rose-400" /> Frequência Cardíaca Média (BPM):
             </span>
-            <input
-              type="number"
+            <NumericInput
               value={watchHeartRate}
-              onChange={(e) => onUpdateHeartRate(Number(e.target.value) || 0)}
+              allowDecimals={false}
+              onChangeValue={(val) => onUpdateHeartRate(val || 0)}
               className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-xl font-black font-mono text-white outline-none focus:border-white/30"
               placeholder="Ex: 135"
             />
