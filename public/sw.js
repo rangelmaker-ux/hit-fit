@@ -1,20 +1,22 @@
-const CACHE_NAME = 'hitfit-duo-v1';
+const CACHE_NAME = 'hitfit-duo-v2';
 const STATIC_ASSETS = [
   '/',
+  '/index.html',
   '/manifest.webmanifest',
   '/icon.svg',
+  '/icon-maskable.svg',
   '/icon-192.png',
   '/icon-512.png',
   '/icon-maskable-512.png',
-  '/favicon.svg'
+  '/apple-touch-icon.png',
+  '/favicon.svg',
+  '/favicon.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch(() => {
-        // Fallback seguro caso algum asset não esteja pronto
-      });
+      return cache.addAll(STATIC_ASSETS).catch(() => {});
     })
   );
   self.skipWaiting();
@@ -32,46 +34,47 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Ignora chamadas não GET ou extensões
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
 
-  // Não cacheia requisições externas de APIs ou scripts de dev
+  // Não intercepta requisições de outros domínios
   if (url.origin !== self.location.origin) return;
 
+  const isNavigation = event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html');
+
+  if (isNavigation) {
+    // Network-First para páginas HTML: garante versão mais recente da Vercel sem prender usuário em hash antigo
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          return (await caches.match('/index.html')) || (await caches.match('/'));
+        })
+    );
+    return;
+  }
+
+  // Cache-First com atualização em background para assets estáticos e imagens
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Retorna do cache e atualiza em background
-        fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(event.request, networkResponse);
-              });
-            }
-          })
-          .catch(() => {});
         return cachedResponse;
       }
-
-      return fetch(event.request)
-        .then((networkResponse) => {
-          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-            return networkResponse;
-          }
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-          return networkResponse;
-        })
-        .catch(() => {
-          // Se estiver offline e pedir HTML, serve a home em cache
-          if (event.request.headers.get('accept')?.includes('text/html')) {
-            return caches.match('/');
-          }
-        });
+      return fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return networkResponse;
+      });
     })
   );
 });

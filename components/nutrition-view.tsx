@@ -224,7 +224,7 @@ export function NutritionView({
 
       {/* FORMULÁRIO DE BIOMETRIA */}
       {editingProfile && (
-        <div className="p-4 rounded-3xl bg-black/50 border border-white/10 grid grid-cols-2 gap-3 text-xs animate-in fade-in">
+        <div className="p-4 rounded-3xl bg-[#161B22] border border-[#21262D] grid grid-cols-2 gap-3 text-xs animate-in fade-in">
           <label className="flex flex-col gap-1">
             <span className="text-neutral-400">Peso Atual (kg):</span>
             <input
@@ -232,7 +232,7 @@ export function NutritionView({
               step="0.1"
               value={profile.weightKg}
               onChange={(e) => setProfile({ ...profile, weightKg: Number(e.target.value) || 0 })}
-              className="bg-white/10 border border-white/15 rounded-xl p-2.5 text-white font-bold"
+              className="bg-black/50 border border-[#21262D] rounded-xl p-2.5 text-white font-bold text-base"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -242,7 +242,7 @@ export function NutritionView({
               step="0.1"
               value={profile.targetWeightKg}
               onChange={(e) => setProfile({ ...profile, targetWeightKg: Number(e.target.value) || 0 })}
-              className="bg-white/10 border border-white/15 rounded-xl p-2.5 text-white font-bold"
+              className="bg-black/50 border border-[#21262D] rounded-xl p-2.5 text-white font-bold text-base"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -251,7 +251,7 @@ export function NutritionView({
               type="number"
               value={profile.heightCm}
               onChange={(e) => setProfile({ ...profile, heightCm: Number(e.target.value) || 0 })}
-              className="bg-white/10 border border-white/15 rounded-xl p-2.5 text-white font-bold"
+              className="bg-black/50 border border-[#21262D] rounded-xl p-2.5 text-white font-bold text-base"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -260,20 +260,46 @@ export function NutritionView({
               type="number"
               value={profile.age}
               onChange={(e) => setProfile({ ...profile, age: Number(e.target.value) || 0 })}
-              className="bg-white/10 border border-white/15 rounded-xl p-2.5 text-white font-bold"
+              className="bg-black/50 border border-[#21262D] rounded-xl p-2.5 text-white font-bold text-base"
             />
           </label>
+
           <label className="flex flex-col gap-1 col-span-2">
+            <span className="text-neutral-400">Fator de Atividade na Rotina:</span>
+            <select
+              value={profile.activityFactor || 1.55}
+              onChange={(e) => setProfile({ ...profile, activityFactor: Number(e.target.value) || 1.55 })}
+              className="bg-black/50 border border-[#21262D] rounded-xl p-2.5 text-white font-bold text-base"
+            >
+              <option value={1.2} className="bg-[#161B22]">Sedentário (pouco ou nenhum exercício)</option>
+              <option value={1.375} className="bg-[#161B22]">Levemente Ativo (treino 1 a 3 dias/semana)</option>
+              <option value={1.55} className="bg-[#161B22]">Moderadamente Ativo (treino de musculação 5 dias/sem)</option>
+              <option value={1.725} className="bg-[#161B22]">Muito Ativo (treino pesado diário + trabalho ativo)</option>
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1">
             <span className="text-neutral-400">Objetivo Físico:</span>
             <select
               value={profile.goal}
               onChange={(e) => setProfile({ ...profile, goal: e.target.value as UserBioProfile['goal'] })}
-              className="bg-white/10 border border-white/15 rounded-xl p-2.5 text-white font-bold"
+              className="bg-black/50 border border-[#21262D] rounded-xl p-2.5 text-white font-bold text-base"
             >
-              <option value="fat_loss" className="bg-[#121512]">Perda de Gordura com Preservação de Massa</option>
-              <option value="recomp" className="bg-[#121512]">Recomposição Corporal (Definição Simultânea)</option>
-              <option value="hypertrophy" className="bg-[#121512]">Hipertrofia Muscular Controlada</option>
+              <option value="fat_loss" className="bg-[#161B22]">Perda de Gordura</option>
+              <option value="recomp" className="bg-[#161B22]">Recomposição Corporal</option>
+              <option value="hypertrophy" className="bg-[#161B22]">Hipertrofia Muscular</option>
             </select>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-neutral-400">Déficit Planejado (kcal):</span>
+            <input
+              type="number"
+              step="50"
+              value={profile.customDailyDeficit || 400}
+              onChange={(e) => setProfile({ ...profile, customDailyDeficit: Number(e.target.value) || 0 })}
+              className="bg-black/50 border border-[#21262D] rounded-xl p-2.5 text-white font-bold text-base"
+            />
           </label>
         </div>
       )}
@@ -591,6 +617,20 @@ export function NutritionView({
             Salvar Peso
           </button>
         </div>
+      </div>
+
+      {/* AVISO CIENTÍFICO E PRIVACIDADE LOCAL */}
+      <div className="p-4 rounded-3xl bg-[#161B22] border border-[#21262D] text-xs text-neutral-400 leading-relaxed flex flex-col gap-1.5 shadow-md">
+        <span className="font-bold text-neutral-200 flex items-center gap-1.5">
+          <Layers size={14} style={{ color: accentColor }} />
+          Diretriz Científica & Privacidade de Dados
+        </span>
+        <p className="text-[11px]">
+          Metas calculadas pela equação de Mifflin-St Jeor com balanço dinâmico (sem contagem dupla com relógio). Estes valores são estimativas de engenharia nutricional e não substituem prescrição médica.
+        </p>
+        <p className="text-[11px] text-neutral-500">
+          🔒 Todos os seus dados alimentares, peso e hidratação ficam gravados estritamente na memória deste celular/navegador. Para transferir para outro aparelho, acesse a aba <strong>Duo Casal</strong> e clique em <em>Exportar Backup</em>.
+        </p>
       </div>
 
     </div>

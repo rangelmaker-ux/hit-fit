@@ -25,10 +25,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
   viewportFit: 'cover',
-  themeColor: '#070908'
+  themeColor: '#090D12'
 };
 
 export default function RootLayout({
@@ -41,7 +40,7 @@ export default function RootLayout({
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
-      <body className="bg-[#070908] text-[#f4f5ef] antialiased min-h-screen">
+      <body className="bg-[#090D12] text-[#f4f5ef] antialiased min-h-screen">
         {children}
         {/* Registro do Service Worker para suporte PWA offline */}
         <script

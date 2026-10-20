@@ -20,7 +20,8 @@ import {
   Layers,
   Zap,
   TrendingUp,
-  UsersRound
+  UsersRound,
+  Trophy
 } from 'lucide-react';
 
 interface CoupleSetup {
@@ -150,6 +151,9 @@ export default function Home() {
   const [restSeconds, setRestSeconds] = useState(60);
   const [restActive, setRestActive] = useState(false);
   const [restEndTime, setRestEndTime] = useState(0);
+
+  // Modal de Conclusão de Treino com Métricas
+  const [completedModalOpen, setCompletedModalOpen] = useState(false);
 
   // Modal do Relógio Inteligente / Dados Cardíacos
   const [watchModalOpen, setWatchModalOpen] = useState(false);
@@ -281,6 +285,31 @@ export default function Home() {
   }, 0);
   const progressPct = Math.round((completedSetsToday / Math.max(1, totalSetsToday)) * 100);
 
+  // Finalizar Sessão de Treino e Salvar no Histórico Local
+  const handleFinishWorkout = () => {
+    if (workoutSeconds === 0 && completedSetsToday === 0) {
+      alert('Inicie o cronômetro ou marque pelo menos uma série para registrar a conclusão do treino!');
+      return;
+    }
+    const sessionRecord = {
+      id: `session-${Date.now()}`,
+      date: new Date().toISOString(),
+      workoutTitle: todayWorkout.title,
+      durationSeconds: workoutSeconds,
+      completedSets: completedSetsToday,
+      totalSets: totalSetsToday,
+      caloriesEstimated: watchCalories || Math.round(workoutSeconds * 0.12)
+    };
+    try {
+      const historyKey = `hitfit-history-${profile}`;
+      const existing = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      existing.unshift(sessionRecord);
+      localStorage.setItem(historyKey, JSON.stringify(existing.slice(0, 30)));
+    } catch {}
+    setWorkoutActive(false);
+    setCompletedModalOpen(true);
+  };
+
   // Web Bluetooth API para sensores cardíacos BLE
   const connectBluetoothWatch = async () => {
     interface NavigatorBLE {
@@ -312,18 +341,18 @@ export default function Home() {
 
   if (!isClient) {
     return (
-      <main className="min-h-screen bg-[#070908] text-white flex items-center justify-center p-4">
+      <main className="min-h-screen bg-[#090D12] text-white flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-3">
           <Dumbbell className="w-8 h-8 text-[#c3f75a] animate-spin" />
-          <p className="text-sm font-semibold text-neutral-400">Carregando Hit-Fit Duo…</p>
+          <p className="text-sm font-semibold text-neutral-400">Carregando HIT-FIT DUO PRO…</p>
         </div>
       </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#070908] text-neutral-100 flex flex-col items-center overflow-x-hidden selection:bg-[#c3f75a]/30">
-      <div className="w-full max-w-lg min-h-screen flex flex-col px-4 pt-3 pb-36">
+    <div className="min-h-screen bg-[#090D12] text-neutral-100 flex flex-col items-center overflow-x-hidden selection:bg-[#c3f75a]/30">
+      <div className="w-full max-w-lg min-h-screen flex flex-col px-4 pt-3 pb-[max(7rem,calc(env(safe-area-inset-bottom)+6rem))]">
         
         {/* HEADER: IDENTIDADE VISUAL HF DUO & SENSORS */}
         <header className="flex items-center justify-between py-2.5 border-b border-white/5 mb-3">
@@ -655,7 +684,7 @@ export default function Home() {
                       <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">
                         Séries de {currentPerson.name}:
                       </span>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4 gap-2">
                         {Array.from({ length: exercise.sets }).map((_, sIdx) => {
                           const setKey = getSetKey(dayIndex, exercise.id, sIdx);
                           const state = savedSets[setKey] || { done: false, weightKg: '' };
@@ -709,12 +738,12 @@ export default function Home() {
       </div>
 
       {/* ======================= BARRA INFERIOR FIXA DE TREINO ======================= */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 flex justify-center bg-[#070908]/95 backdrop-blur-xl border-t border-white/10 py-2.5 px-4">
+      <footer className="fixed bottom-0 left-0 right-0 z-40 flex justify-center bg-[#090D12]/95 backdrop-blur-xl border-t border-[#21262D] pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 px-4 shadow-2xl">
         <div className="w-full max-w-lg flex flex-col gap-2">
           
           {/* BARRA DE CRONÔMETRO GERAL & DESCANSO */}
-          <div className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-white/5 border border-white/10 shadow-xl">
-            <div className="flex items-center gap-2.5">
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-[#161B22] border border-[#21262D] shadow-xl">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setWorkoutActive(!workoutActive)}
                 className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-transform active:scale-95"
@@ -733,7 +762,23 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pl-3 border-l border-white/10">
+            {(workoutSeconds > 0 || completedSetsToday > 0) && (
+              <button
+                onClick={handleFinishWorkout}
+                className="py-1.5 px-2.5 rounded-xl text-[10px] font-extrabold uppercase transition-all shadow-md active:scale-95 flex items-center gap-1 border shrink-0"
+                style={{
+                  backgroundColor: `${accentColor}20`,
+                  borderColor: `${accentColor}60`,
+                  color: accentColor
+                }}
+                title="Finalizar e Salvar Treino"
+              >
+                <Trophy size={12} />
+                <span>Concluir</span>
+              </button>
+            )}
+
+            <div className="flex items-center gap-1.5 pl-2 border-l border-[#21262D]">
               <div>
                 <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block text-right">
                   DESCANSO
@@ -890,6 +935,66 @@ export default function Home() {
               style={{ backgroundColor: accentColor }}
             >
               Salvar Dados da Sessão
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= MODAL DE CONCLUSÃO DE TREINO ======================= */}
+      {completedModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in"
+          onClick={() => setCompletedModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-[#161B22] border border-[#21262D] rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center gap-4 text-neutral-100"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Treino Concluído"
+          >
+            <div 
+              className="w-16 h-16 rounded-full flex items-center justify-center shadow-lg border"
+              style={{
+                backgroundColor: `${accentColor}20`,
+                borderColor: `${accentColor}60`,
+                color: accentColor
+              }}
+            >
+              <Trophy size={32} />
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                Sessão Registrada
+              </span>
+              <h3 className="text-xl font-black text-white mt-0.5">Parabéns, {currentPerson.name}!</h3>
+              <p className="text-xs text-neutral-300 mt-1">{todayWorkout.title}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 w-full pt-1">
+              <div className="bg-[#0D1117] p-3 rounded-2xl border border-[#21262D]">
+                <span className="text-[10px] text-neutral-400 uppercase block">Tempo Total</span>
+                <strong className="text-base font-black font-mono text-white">{formatTimer(workoutSeconds)}</strong>
+              </div>
+              <div className="bg-[#0D1117] p-3 rounded-2xl border border-[#21262D]">
+                <span className="text-[10px] text-neutral-400 uppercase block">Séries Concluídas</span>
+                <strong className="text-base font-black font-mono" style={{ color: accentColor }}>
+                  {completedSetsToday} / {totalSetsToday}
+                </strong>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setCompletedModalOpen(false);
+                setWorkoutSeconds(0);
+                setWorkoutActive(false);
+              }}
+              className="w-full py-3.5 rounded-2xl font-bold text-xs shadow-md transition-transform active:scale-95 text-[#10150d]"
+              style={{ backgroundColor: accentColor }}
+            >
+              Salvar e Fechar Sessão
             </button>
           </div>
         </div>
