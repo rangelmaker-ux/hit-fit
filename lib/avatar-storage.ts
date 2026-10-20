@@ -130,3 +130,5 @@ export function compressImageFile(file: File, maxDim = 320, quality = 0.82): Pro
     reader.readAsDataURL(file);
   });
 }
+
+export const compressAndCropAvatar = compressImageFile;

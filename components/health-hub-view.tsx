@@ -17,6 +17,7 @@ interface HealthHubViewProps {
   initialSubTab?: HealthSubTab;
   currentWeightKg?: number;
   isReadOnly?: boolean;
+  onWeightUpdated?: (w: number) => void;
 }
 
 export function HealthHubView({
@@ -25,8 +26,9 @@ export function HealthHubView({
   accentColor,
   todayWorkoutCaloriesBurned = 0,
   initialSubTab = 'alimentacao',
-  currentWeightKg = 82,
-  isReadOnly = false
+  currentWeightKg = 0,
+  isReadOnly = false,
+  onWeightUpdated
 }: HealthHubViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<HealthSubTab>(initialSubTab);
   const [liveWeightKg, setLiveWeightKg] = useState<number>(currentWeightKg);
@@ -104,7 +106,10 @@ export function HealthHubView({
           athleteName={athleteName}
           accentColor={accentColor}
           isReadOnly={isReadOnly}
-          onWeightUpdated={(latest) => setLiveWeightKg(latest)}
+          onWeightUpdated={(latest) => {
+            setLiveWeightKg(latest);
+            onWeightUpdated?.(latest);
+          }}
         />
       )}
 

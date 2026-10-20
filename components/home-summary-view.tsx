@@ -197,10 +197,10 @@ export function HomeSummaryView({
 
             <div>
               <strong className="text-sm sm:text-base font-black font-mono text-white block leading-tight">
-                {currentWeightKg} kg
+                {currentWeightKg > 0 ? `${currentWeightKg} kg` : '-- kg'}
               </strong>
               <span className="text-[9px] font-mono text-neutral-400 block mt-0.5">
-                Ver evolução
+                {currentWeightKg > 0 ? 'Ver evolução' : 'Registrar'}
               </span>
             </div>
           </button>
@@ -219,10 +219,14 @@ export function HomeSummaryView({
 
             <div>
               <strong className="text-sm sm:text-base font-black font-mono text-white block leading-tight">
-                {targetWeightKg} kg
+                {targetWeightKg > 0 ? `${targetWeightKg} kg` : '-- kg'}
               </strong>
               <span className="text-[9px] font-mono text-neutral-400 block mt-0.5">
-                {diffToGoal === 0 ? 'Alcançada!' : `Faltam ${diffToGoal}kg`}
+                {targetWeightKg > 0
+                  ? diffToGoal === 0
+                    ? 'Alcançada!'
+                    : `Faltam ${diffToGoal}kg`
+                  : 'Definir meta'}
               </span>
             </div>
           </button>

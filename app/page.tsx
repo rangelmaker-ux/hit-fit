@@ -9,23 +9,30 @@ import { ProfileView } from '@/components/profile-view';
 import { HomeSummaryView } from '@/components/home-summary-view';
 import { AthleteSwitcher } from '@/components/athlete-switcher';
 import { KineticWeekRibbon } from '@/components/kinetic-week-ribbon';
-import { HeroWorkoutCard } from '@/components/hero-workout-card';
-import { ExerciseCardRow } from '@/components/exercise-card-row';
+import { GuidedWorkoutView, SkippedExerciseRecord } from '@/components/guided-workout-view';
 import { WorkoutCockpit, MainTabType } from '@/components/workout-cockpit';
 import { WatchModal } from '@/components/watch-modal';
 import { WorkoutCompletedModal } from '@/components/workout-completed-modal';
+import { OnboardingAuthView } from '@/components/onboarding-auth-view';
 import { getAvatar } from '@/lib/avatar-storage';
-import { Dumbbell, Settings2, Watch, Flame } from 'lucide-react';
-
-interface CoupleSetup {
-  mode: 'solo' | 'couple';
-  people: { id: string; name: string }[];
-}
+import {
+  AuthenticatedUser,
+  getStoredUser,
+  checkSession,
+  logoutAthlete,
+  pushSyncData
+} from '@/lib/auth-client';
+import { Dumbbell, Shield, LogOut, Watch, Lock } from 'lucide-react';
 
 interface SavedSetState {
   done: boolean;
   weightKg?: string;
 }
+
+const PEOPLE_CONFIG = [
+  { id: 'person-rangel', name: 'Rangel' },
+  { id: 'person-geicsania', name: 'Geicsania' }
+];
 
 function getInitialDayIndex(): number {
   if (typeof window === 'undefined') return 0;
@@ -40,134 +47,116 @@ function getInitialWeek(): string {
   return `${startOfWeek.getFullYear()}-W${Math.ceil(startOfWeek.getDate() / 7)}`;
 }
 
-function getInitialConfig(): CoupleSetup {
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('hitfit-setup-v2');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.people && parsed.people.length > 0) return parsed;
-      }
-    } catch {}
-  }
-  return {
-    mode: 'couple',
-    people: [
-      { id: 'person-rangel', name: 'Rangel' },
-      { id: 'person-geicsania', name: 'Geicsania' }
-    ]
-  };
-}
-
-function getInitialProfile(): string {
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('hitfit-active-profile-v2');
-      if (stored) return stored;
-    } catch {}
-  }
-  return 'person-rangel';
-}
-
-function getInitialSavedSets(): Record<string, SavedSetState> {
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('hitfit-progress-v2');
-      if (stored) return JSON.parse(stored);
-    } catch {}
-  }
-  return {};
-}
-
-function getInitialWatchCalories(): number {
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('hitfit-watch-cals-v2');
-      if (stored) return Number(stored) || 420;
-    } catch {}
-  }
-  return 420;
-}
-
-function getInitialWorkouts(): DayWorkout[] {
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('hitfit-custom-workouts-v2');
-      if (stored) return JSON.parse(stored);
-    } catch {}
-  }
-  return WORKOUT_DAYS;
-}
-
 export default function Home() {
-  const [config, setConfig] = useState<CoupleSetup>(getInitialConfig);
-  const [loggedInUserId, setLoggedInUserId] = useState<string>(getInitialProfile);
-  const [activeProfile, setActiveProfile] = useState<string>(getInitialProfile);
-  const [editingConfig, setEditingConfig] = useState(false);
-  const [firstName, setFirstName] = useState(() => config.people[0]?.name || 'Rangel');
-  const [secondName, setSecondName] = useState(() => config.people[1]?.name || 'Geicsania');
-
-  const [dayIndex, setDayIndex] = useState<number>(getInitialDayIndex);
-  const [viewTab, setViewTab] = useState<MainTabType>('inicio');
-  const [healthSubTab, setHealthSubTab] = useState<HealthSubTab>('alimentacao');
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-
-  const [workouts, setWorkouts] = useState<DayWorkout[]>(getInitialWorkouts);
-  const [savedSets, setSavedSets] = useState<Record<string, SavedSetState>>(getInitialSavedSets);
-  const [currentWeek] = useState<string>(getInitialWeek);
-
-  const [avatars, setAvatars] = useState<Record<string, string | null>>({});
-
   const isClient = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false
   );
 
+  // Autenticação Real e Sessão Persistente
+  const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(() => {
+    if (typeof window !== 'undefined') {
+      return getStoredUser();
+    }
+    return null;
+  });
+  const [authChecking, setAuthChecking] = useState(true);
+
+  // Perfil atualmente visualizado (pode ser o próprio ou o parceiro em modo leitura)
+  const [activeProfile, setActiveProfile] = useState<string>(() => {
+    return currentUser?.id || 'person-rangel';
+  });
+
+  const [dayIndex, setDayIndex] = useState<number>(getInitialDayIndex);
+  const [viewTab, setViewTab] = useState<MainTabType>('inicio');
+  const [healthSubTab, setHealthSubTab] = useState<HealthSubTab>('alimentacao');
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+
+  const [workouts] = useState<DayWorkout[]>(WORKOUT_DAYS);
+  const [savedSets, setSavedSets] = useState<Record<string, SavedSetState>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('hitfit-progress-v2');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return {};
+  });
+  const [currentWeek] = useState<string>(getInitialWeek);
+  const [avatars, setAvatars] = useState<Record<string, string | null>>({});
+
+  // Cronômetros e Telemetria de Treino
   const [workoutActive, setWorkoutActive] = useState(false);
   const [workoutSeconds, setWorkoutSeconds] = useState(0);
-
   const [restSeconds, setRestSeconds] = useState(60);
   const [restActive, setRestActive] = useState(false);
   const [restEndTime, setRestEndTime] = useState(0);
 
+  // Modais
   const [completedModalOpen, setCompletedModalOpen] = useState(false);
+  const [completedSummary, setCompletedSummary] = useState<{
+    completedExercisesCount: number;
+    skippedExercises: SkippedExerciseRecord[];
+    totalWeightVolumeKg: number;
+    durationSeconds: number;
+    completedSets: number;
+    totalSets: number;
+  } | null>(null);
+
   const [watchModalOpen, setWatchModalOpen] = useState(false);
-  const [watchCalories, setWatchCalories] = useState<number>(getInitialWatchCalories);
+  const [watchCalories, setWatchCalories] = useState<number>(0); // Zerado por padrão real
   const [watchHeartRate, setWatchHeartRate] = useState<number>(135);
   const [bleConnected, setBleConnected] = useState(false);
   const [bleDeviceName, setBleDeviceName] = useState<string | null>(null);
 
+  // Checagem de Sessão Real no Backend
+  useEffect(() => {
+    if (!isClient) return;
+    checkSession()
+      .then((user) => {
+        if (user) {
+          setCurrentUser(user);
+          setActiveProfile(user.id);
+        }
+      })
+      .finally(() => {
+        setAuthChecking(false);
+      });
+  }, [isClient]);
+
   // Carrega avatares do IndexedDB
   const refreshAvatars = useCallback(() => {
-    config.people.forEach((p) => {
+    PEOPLE_CONFIG.forEach((p) => {
       getAvatar(p.id).then((url) => {
         setAvatars((prev) => ({ ...prev, [p.id]: url }));
       });
     });
-  }, [config.people]);
+  }, []);
 
   useEffect(() => {
     refreshAvatars();
   }, [refreshAvatars]);
 
+  // Persistência local segura
   useEffect(() => {
     if (!isClient) return;
     try {
-      localStorage.setItem('hitfit-setup-v2', JSON.stringify(config));
-      localStorage.setItem('hitfit-active-profile-v2', activeProfile);
       localStorage.setItem('hitfit-progress-v2', JSON.stringify(savedSets));
-      localStorage.setItem('hitfit-watch-cals-v2', watchCalories.toString());
-      localStorage.setItem('hitfit-custom-workouts-v2', JSON.stringify(workouts));
+      if (watchCalories > 0) {
+        localStorage.setItem(`hitfit-watch-cals-${activeProfile}`, watchCalories.toString());
+      }
     } catch {}
-  }, [config, activeProfile, savedSets, watchCalories, workouts, isClient]);
+  }, [savedSets, watchCalories, activeProfile, isClient]);
 
+  // Timer de treino
   useEffect(() => {
     if (!workoutActive) return;
     const interval = setInterval(() => setWorkoutSeconds((s) => s + 1), 1000);
     return () => clearInterval(interval);
   }, [workoutActive]);
 
+  // Timer de descanso
   useEffect(() => {
     if (!restActive) return;
     const interval = setInterval(() => {
@@ -183,13 +172,15 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [restActive, restEndTime]);
 
-  const currentPerson = config.people.find((p) => p.id === activeProfile) || config.people[0];
+  const currentPerson = PEOPLE_CONFIG.find((p) => p.id === activeProfile) || PEOPLE_CONFIG[0];
   const isGeicsania = currentPerson.name.toLowerCase().includes('geic');
   const accentColor = isGeicsania ? '#FF267A' : '#C4F53C';
   const todayWorkout = workouts[dayIndex] || WORKOUT_DAYS[dayIndex];
 
-  // Regra de Permissões: Se o perfil ativo for diferente do usuário logado, entra em modo somente leitura
-  const isReadOnly = activeProfile !== loggedInUserId;
+  // REGRA DE SEGURANÇA E AUTORIZAÇÃO:
+  // Apenas o usuário autenticado pode alterar seus próprios dados.
+  // Visualizar o cônjuge ativa o modo estritamente Somente Leitura (Read-Only).
+  const isReadOnly = currentUser ? activeProfile !== currentUser.id : true;
 
   const getSetKey = useCallback(
     (dayIdx: number, exerciseId: string, setIdx: number) =>
@@ -208,7 +199,14 @@ export default function Home() {
     const key = getSetKey(dayIndex, exerciseId, setIdx);
     setSavedSets((prev) => {
       const current = prev[key] || { done: false };
-      return { ...prev, [key]: { ...current, done: !current.done } };
+      const nextDone = !current.done;
+      const updated = { ...prev, [key]: { ...current, done: nextDone } };
+      
+      // Sincroniza com a nuvem
+      if (currentUser) {
+        pushSyncData({ userId: currentUser.id, savedSets: updated });
+      }
+      return updated;
     });
     startRest(60);
   };
@@ -218,79 +216,51 @@ export default function Home() {
     const key = getSetKey(dayIndex, exerciseId, setIdx);
     setSavedSets((prev) => {
       const current = prev[key] || { done: false };
-      return { ...prev, [key]: { ...current, weightKg } };
-    });
-  };
-
-  const handleSwapExercise = (altName: string) => {
-    if (isReadOnly || !selectedExercise) return;
-    setWorkouts((prev) =>
-      prev.map((day, dIdx) => {
-        if (dIdx !== dayIndex) return day;
-        return {
-          ...day,
-          exercises: day.exercises.map((ex) => {
-            if (ex.id !== selectedExercise.id) return ex;
-            return {
-              ...ex,
-              name: altName,
-              machines: {
-                ...ex.machines,
-                primary: {
-                  ...ex.machines.primary,
-                  name: altName,
-                  description: 'Aparelho alternativo selecionado para o treino de hoje.'
-                }
-              }
-            };
-          })
-        };
-      })
-    );
-  };
-
-  const totalSetsToday = todayWorkout.exercises.reduce((sum, ex) => sum + ex.sets, 0);
-  const completedSetsToday = todayWorkout.exercises.reduce((sum, ex) => {
-    let completed = 0;
-    for (let s = 0; s < ex.sets; s++) {
-      if (savedSets[getSetKey(dayIndex, ex.id, s)]?.done) completed++;
-    }
-    return sum + completed;
-  }, 0);
-  const progressPct = Math.round((completedSetsToday / Math.max(1, totalSetsToday)) * 100);
-
-  const isDayCompleted = (dIdx: number) => {
-    const day = workouts[dIdx] || WORKOUT_DAYS[dIdx];
-    if (!day || !day.exercises.length) return false;
-    return day.exercises.every((ex) => {
-      for (let s = 0; s < ex.sets; s++) {
-        if (!savedSets[getSetKey(dIdx, ex.id, s)]?.done) return false;
+      const updated = { ...prev, [key]: { ...current, weightKg } };
+      if (currentUser) {
+        pushSyncData({ userId: currentUser.id, savedSets: updated });
       }
-      return true;
+      return updated;
     });
   };
 
-  const handleFinishWorkout = () => {
-    if (workoutSeconds === 0 && completedSetsToday === 0) {
-      alert('Inicie o cronômetro ou marque pelo menos uma série para registrar a conclusão do treino!');
-      return;
-    }
+  const handleFinishGuidedWorkout = (summary: {
+    completedExercisesCount: number;
+    skippedExercises: SkippedExerciseRecord[];
+    totalWeightVolumeKg: number;
+    durationSeconds: number;
+    completedSets: number;
+    totalSets: number;
+  }) => {
     const sessionRecord = {
       id: `session-${Date.now()}`,
       date: new Date().toISOString(),
       workoutTitle: todayWorkout.title,
-      durationSeconds: workoutSeconds,
-      completedSets: completedSetsToday,
-      totalSets: totalSetsToday,
-      caloriesEstimated: watchCalories || Math.round(workoutSeconds * 0.12)
+      durationSeconds: summary.durationSeconds,
+      completedSets: summary.completedSets,
+      totalSets: summary.totalSets,
+      completedExercisesCount: summary.completedExercisesCount,
+      skippedExercises: summary.skippedExercises,
+      totalWeightVolumeKg: summary.totalWeightVolumeKg,
+      caloriesEstimated: watchCalories || Math.round(summary.durationSeconds * 0.12)
     };
+
     try {
       const historyKey = `hitfit-history-${activeProfile}`;
       const existing = JSON.parse(localStorage.getItem(historyKey) || '[]');
       existing.unshift(sessionRecord);
       localStorage.setItem(historyKey, JSON.stringify(existing.slice(0, 30)));
+
+      if (currentUser && !isReadOnly) {
+        pushSyncData({
+          userId: currentUser.id,
+          workoutHistory: existing.slice(0, 30)
+        });
+      }
     } catch {}
+
     setWorkoutActive(false);
+    setCompletedSummary(summary);
     setCompletedModalOpen(true);
   };
 
@@ -312,160 +282,145 @@ export default function Home() {
         alert('Para pareamento BLE nativo, utilize Google Chrome ou Edge no Android/PC.');
       }
     } else {
-      alert('Seu navegador atual não suporta Web Bluetooth nativo. Registre os dados manualmente no campo abaixo!');
+      alert('Seu navegador atual não suporta Web Bluetooth nativo. Registre os dados manualmente no campo do relógio.');
     }
   };
 
-  // Leitura de Água e Peso para os Resumos da Home
+  const handleLogout = () => {
+    logoutAthlete();
+    setCurrentUser(null);
+  };
+
+  // Leitura de Água e Peso Reais (sem valores predefinidos fictícios)
   const todayDate = new Date().toISOString().split('T')[0];
   const waterConsumedToday = isClient
-    ? Number(localStorage.getItem(`hitfit-water-${todayDate}-${activeProfile}`) || 1250)
-    : 1250;
+    ? Number(localStorage.getItem(`hitfit-water-${todayDate}-${activeProfile}`) || 0)
+    : 0;
   const currentWeightToday = isClient
-    ? Number(localStorage.getItem(`hitfit-weight-${activeProfile}`) || (isGeicsania ? 64 : 82))
-    : (isGeicsania ? 64 : 82);
-  const targetWeightToday = isGeicsania ? 58 : 76;
+    ? Number(localStorage.getItem(`hitfit-weight-${activeProfile}`) || 0)
+    : 0;
+  const targetWeightToday = isClient
+    ? Number(localStorage.getItem(`hitfit-goal-weight-${activeProfile}`) || 0)
+    : 0;
 
-  if (!isClient) {
+  if (!isClient || authChecking) {
     return (
       <main className="min-h-screen bg-[#07090C] text-white flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-3">
           <Dumbbell className="w-8 h-8 text-[#C4F53C] animate-spin" />
-          <p className="text-sm font-bold tracking-tight text-neutral-400">Iniciando HIT-FIT DUO PRO…</p>
+          <p className="text-sm font-bold tracking-tight text-neutral-400">Autenticando no HIT-FIT DUO PRO…</p>
         </div>
       </main>
     );
   }
 
+  // TELA DE CADASTRO OU LOGIN SE NÃO ESTIVER AUTENTICADO (APLICATIVO ZERADO)
+  if (!currentUser) {
+    return (
+      <main className="min-h-screen bg-[#07090C] text-neutral-100 flex items-center justify-center p-4 selection:bg-[#C4F53C]/30">
+        <OnboardingAuthView
+          onAuthenticated={(user) => {
+            setCurrentUser(user);
+            setActiveProfile(user.id);
+            refreshAvatars();
+          }}
+        />
+      </main>
+    );
+  }
+
+  const totalSetsToday = todayWorkout.exercises.reduce((sum, ex) => sum + ex.sets, 0);
+  const completedSetsToday = todayWorkout.exercises.reduce((sum, ex) => {
+    let completed = 0;
+    for (let s = 0; s < ex.sets; s++) {
+      if (savedSets[getSetKey(dayIndex, ex.id, s)]?.done) completed++;
+    }
+    return sum + completed;
+  }, 0);
+  const progressPct = Math.round((completedSetsToday / Math.max(1, totalSetsToday)) * 100);
+
   return (
     <div className="min-h-screen bg-[#07090C] text-neutral-100 flex flex-col items-center overflow-x-hidden selection:bg-[#C4F53C]/30">
       <div className="w-full max-w-lg min-h-screen flex flex-col px-4 pt-3 pb-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))]">
         
-        {/* HEADER: MARCA AUTORAL HF DUO PRO & TELEMETRIA */}
-        <header className="flex items-center justify-between py-3 border-b border-[rgba(255,255,255,0.06)] mb-3">
-          <div className="flex items-center gap-3">
+        {/* HEADER: STATUS DE AUTENTICAÇÃO E ATLETA */}
+        <header className="flex items-center justify-between py-3 border-b border-white/[0.06] mb-3">
+          <div className="flex items-center gap-2.5">
             <div
-              className="relative w-11 h-11 rounded-2xl flex items-center justify-center font-black shadow-2xl border transition-all duration-300 tap-haptic"
+              className="w-10 h-10 rounded-2xl flex items-center justify-center font-black shadow-lg border"
               style={{
                 backgroundColor: `${accentColor}15`,
-                borderColor: `${accentColor}45`,
+                borderColor: `${accentColor}40`,
                 color: accentColor
               }}
             >
-              <svg viewBox="0 0 40 40" className="w-6 h-6 fill-none stroke-current" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 8 V32 M10 20 H22 M22 8 V32" />
-                <path d="M28 8 H36 M28 20 H34 M28 8 V32" />
-              </svg>
+              <Dumbbell size={18} />
             </div>
 
             <div>
-              <div className="flex items-center gap-1.5 font-black text-lg tracking-tight text-white leading-none">
-                <span>HIT-FIT</span>
-                <span
-                  className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded uppercase tracking-wider border"
-                  style={{
-                    backgroundColor: `${accentColor}20`,
-                    borderColor: `${accentColor}40`,
-                    color: accentColor
-                  }}
-                >
-                  DUO PRO
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black tracking-tight text-white block">
+                  HIT-FIT DUO PRO
+                </span>
+                <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 font-bold border border-emerald-500/30">
+                  ONLINE
                 </span>
               </div>
-              <p className="text-[10px] tracking-widest text-neutral-400 uppercase font-mono mt-1">
-                Cockpit de Performance · Casal
-              </p>
+              <span className="text-[10px] font-mono text-neutral-400 flex items-center gap-1">
+                <Shield size={10} style={{ color: accentColor }} />
+                Logado: <strong className="text-white">{currentUser.name}</strong>
+              </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setWatchModalOpen(true)}
-              className="py-2 px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-[rgba(255,255,255,0.08)] text-neutral-300 transition-all flex items-center gap-1.5 tap-haptic"
-              aria-label="Registrar Telemetria do Relógio"
+              className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-neutral-400 hover:text-white tap-haptic"
+              title="Smartwatch"
             >
-              <Watch size={15} style={{ color: bleConnected ? accentColor : '#94A3B8' }} />
-              <span className="text-[11px] font-mono font-bold">{watchCalories} kcal</span>
+              <Watch size={16} />
             </button>
 
             <button
-              onClick={() => setEditingConfig(!editingConfig)}
-              className="p-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-[rgba(255,255,255,0.08)] text-neutral-400 hover:text-white transition-all tap-haptic"
-              aria-label="Configurar Atletas"
+              onClick={handleLogout}
+              className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 tap-haptic"
+              title="Encerrar Sessão"
             >
-              <Settings2 size={16} />
+              <LogOut size={16} />
             </button>
           </div>
         </header>
 
-        {/* MODAL / FORMULÁRIO DE NOMES DO CASAL */}
-        {editingConfig && (
-          <div className="mb-4 p-4 rounded-3xl bg-[#0E121A] border border-[rgba(255,255,255,0.1)] flex flex-col gap-3 animate-spring-in">
-            <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest">
-              Configuração dos Atletas & Login do Dispositivo:
-            </span>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <input
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Atleta 1"
-                className="p-3 bg-[#07090C] border border-white/10 rounded-2xl text-white font-bold text-base outline-none focus:border-white/30"
-              />
-              <input
-                type="text"
-                value={secondName}
-                onChange={(e) => setSecondName(e.target.value)}
-                placeholder="Atleta 2"
-                className="p-3 bg-[#07090C] border border-white/10 rounded-2xl text-white font-bold text-base outline-none focus:border-white/30"
-              />
+        {/* ALERTA DE MODO SOMENTE LEITURA QUANDO VISUALIZANDO CÔNJUGE */}
+        {isReadOnly && (
+          <div className="mb-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-300">
+            <div className="flex items-center gap-2">
+              <Lock size={14} className="shrink-0 text-amber-400" />
+              <span>
+                Visualizando perfil de <strong>{currentPerson.name}</strong> (Modo Leitura).
+              </span>
             </div>
-
-            <div className="flex items-center justify-between text-xs font-mono text-neutral-400 pt-1">
-              <span>Atleta Logado neste Celular:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const nextUser = loggedInUserId === 'person-rangel' ? 'person-geicsania' : 'person-rangel';
-                  setLoggedInUserId(nextUser);
-                  setActiveProfile(nextUser);
-                }}
-                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white/10 text-white"
-              >
-                Alternar Titular
-              </button>
-            </div>
-
             <button
-              onClick={() => {
-                setConfig({
-                  mode: 'couple',
-                  people: [
-                    { id: 'person-rangel', name: firstName.trim() || 'Rangel' },
-                    { id: 'person-geicsania', name: secondName.trim() || 'Geicsania' }
-                  ]
-                });
-                setEditingConfig(false);
-              }}
-              className="py-3 px-4 rounded-2xl font-bold text-xs shadow-md transition-transform active:scale-95 text-[#07090C]"
-              style={{ backgroundColor: accentColor }}
+              onClick={() => setActiveProfile(currentUser.id)}
+              className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 font-bold text-[10px] font-mono text-amber-200 tap-haptic"
             >
-              Salvar Alterações
+              Meu Perfil
             </button>
           </div>
         )}
 
-        {/* MOTORSPORT ATHLETE SWITCHER COM FOTOS REAIS */}
+        {/* SWITCHER DE ATLETAS (NÃO ALTERA A IDENTIDADE AUTENTICADA) */}
         <div className="mb-4">
           <AthleteSwitcher
-            people={config.people}
+            people={PEOPLE_CONFIG}
             activeProfileId={activeProfile}
             onSelectProfile={setActiveProfile}
             avatars={avatars}
           />
         </div>
 
-        {/* ======================= ABA 1: INÍCIO (RESUMO) ======================= */}
+        {/* ABA 1: INÍCIO */}
         {viewTab === 'inicio' && (
           <HomeSummaryView
             athleteName={currentPerson.name}
@@ -476,7 +431,7 @@ export default function Home() {
             completedSets={completedSetsToday}
             totalSets={totalSetsToday}
             waterConsumedMl={waterConsumedToday}
-            waterGoalMl={Math.round(currentWeightToday * 38)}
+            waterGoalMl={Math.max(2000, Math.round(currentWeightToday * 38))}
             currentWeightKg={currentWeightToday}
             targetWeightKg={targetWeightToday}
             onOpenWorkout={() => setViewTab('treino')}
@@ -488,78 +443,47 @@ export default function Home() {
           />
         )}
 
-        {/* ======================= ABA 2: TREINAR (COCKPIT DE SESSÃO) ======================= */}
+        {/* ABA 2: TREINO GUIADO SEQUENCIAL (1 EXERCÍCIO POR VEZ) */}
         {viewTab === 'treino' && (
-          <div className="flex flex-col gap-4 animate-spring-in">
+          <div className="flex flex-col gap-3">
             <KineticWeekRibbon
-              days={WORKOUT_DAYS}
+              days={workouts}
               activeDayIndex={dayIndex}
               onSelectDay={setDayIndex}
               accentColor={accentColor}
-              isDayCompleted={isDayCompleted}
+              isDayCompleted={(dIdx) => {
+                const day = workouts[dIdx];
+                if (!day || !day.exercises.length) return false;
+                return day.exercises.every((ex) => {
+                  for (let s = 0; s < ex.sets; s++) {
+                    if (!savedSets[getSetKey(dIdx, ex.id, s)]?.done) return false;
+                  }
+                  return true;
+                });
+              }}
             />
 
-            <HeroWorkoutCard
+            <GuidedWorkoutView
               workout={todayWorkout}
-              currentPersonName={currentPerson.name}
-              progressPct={progressPct}
-              completedSets={completedSetsToday}
-              totalSets={totalSetsToday}
+              athleteName={currentPerson.name}
               accentColor={accentColor}
+              isReadOnly={isReadOnly}
+              workoutActive={workoutActive}
+              workoutSeconds={workoutSeconds}
+              onToggleWorkout={() => setWorkoutActive((v) => !v)}
+              onFinishWorkout={handleFinishGuidedWorkout}
+              onStartRest={startRest}
+              savedSets={savedSets}
+              getSetKey={getSetKey}
+              dayIndex={dayIndex}
+              onToggleSet={toggleSet}
+              onUpdateSetWeight={updateSetWeight}
+              onOpenDetailModal={setSelectedExercise}
             />
-
-            {/* CARD METABÓLICO FINALIZADOR */}
-            <div className="p-4 rounded-3xl bg-[#0B0E15] border border-[rgba(245,158,11,0.2)] flex items-start gap-3 shadow-lg relative overflow-hidden">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 shadow-md">
-                <Flame size={20} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-[9px] font-mono uppercase font-black text-amber-400 tracking-wider">
-                    FINALIZADOR METABÓLICO · {todayWorkout.finishCardio.durationMin} MIN
-                  </span>
-                  <span className="text-[11px] font-mono font-bold text-neutral-300">
-                    ~{todayWorkout.finishCardio.caloriesBurnTarget} kcal
-                  </span>
-                </div>
-                <h4 className="text-sm font-black text-white mt-0.5 tracking-tight">
-                  {todayWorkout.finishCardio.name}
-                </h4>
-                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                  {todayWorkout.finishCardio.protocol}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between px-1 pt-1">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
-                <Dumbbell size={14} style={{ color: accentColor }} />
-                Deck de Exercícios ({todayWorkout.exercises.length})
-              </span>
-              <span className="text-[10px] text-neutral-400 font-mono">Biomecânica & Séries</span>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {todayWorkout.exercises.map((exercise, eIdx) => (
-                <ExerciseCardRow
-                  key={exercise.id}
-                  exercise={exercise}
-                  index={eIdx}
-                  athleteName={currentPerson.name}
-                  accentColor={accentColor}
-                  savedSets={savedSets}
-                  getSetKey={getSetKey}
-                  dayIndex={dayIndex}
-                  onToggleSet={toggleSet}
-                  onUpdateSetWeight={updateSetWeight}
-                  onOpenDetail={setSelectedExercise}
-                />
-              ))}
-            </div>
           </div>
         )}
 
-        {/* ======================= ABA 3: SAÚDE & NUTRIÇÃO (HUB) ======================= */}
+        {/* ABA 3: SAÚDE & NUTRIÇÃO */}
         {viewTab === 'saude' && (
           <HealthHubView
             profileId={activeProfile}
@@ -569,10 +493,18 @@ export default function Home() {
             initialSubTab={healthSubTab}
             currentWeightKg={currentWeightToday}
             isReadOnly={isReadOnly}
+            onWeightUpdated={(w) => {
+              try {
+                localStorage.setItem(`hitfit-weight-${activeProfile}`, String(w));
+                if (currentUser && !isReadOnly) {
+                  pushSyncData({ userId: currentUser.id, currentWeightKg: w });
+                }
+              } catch {}
+            }}
           />
         )}
 
-        {/* ======================= ABA 4: EVOLUÇÃO (CARGAS) ======================= */}
+        {/* ABA 4: EVOLUÇÃO */}
         {viewTab === 'evolucao' && (
           <EvolutionView
             profileId={activeProfile}
@@ -583,48 +515,34 @@ export default function Home() {
           />
         )}
 
-        {/* ======================= ABA 5: PERFIL (FOTOS & BIOMETRIA) ======================= */}
+        {/* ABA 5: PERFIL */}
         {viewTab === 'perfil' && (
           <ProfileView
             profileId={activeProfile}
             athleteName={currentPerson.name}
             accentColor={accentColor}
             isReadOnly={isReadOnly}
-            people={config.people}
+            people={PEOPLE_CONFIG}
             currentWeek={currentWeek}
             savedSets={savedSets}
             onAvatarUpdated={refreshAvatars}
+            onLogout={handleLogout}
           />
         )}
 
       </div>
 
-      <WorkoutCockpit
-        workoutActive={workoutActive}
-        workoutSeconds={workoutSeconds}
-        onToggleWorkout={() => {
-          if (isReadOnly) return;
-          setWorkoutActive(!workoutActive);
-        }}
-        restActive={restActive}
-        restSeconds={restSeconds}
-        onStartRest={startRest}
-        canFinishWorkout={workoutSeconds > 0 || completedSetsToday > 0}
-        onFinishWorkout={handleFinishWorkout}
-        viewTab={viewTab}
-        onSelectTab={setViewTab}
-        accentColor={accentColor}
-      />
-
+      {/* MODAL BIOMECÂNICO 2D */}
       {selectedExercise && (
         <ExerciseDetailModal
           exercise={selectedExercise}
           accentColor={accentColor}
           onClose={() => setSelectedExercise(null)}
-          onSwapExercise={handleSwapExercise}
+          onSwapExercise={() => {}}
         />
       )}
 
+      {/* MODAL DE SMARTWATCH */}
       <WatchModal
         isOpen={watchModalOpen}
         onClose={() => setWatchModalOpen(false)}
@@ -639,19 +557,45 @@ export default function Home() {
         onConnectBle={connectBluetoothWatch}
       />
 
+      {/* MODAL DE TREINO CONCLUÍDO (RESUMO REAL SEM PULADOS) */}
       <WorkoutCompletedModal
         isOpen={completedModalOpen}
-        onClose={() => {
-          setCompletedModalOpen(false);
-          setWorkoutSeconds(0);
-          setWorkoutActive(false);
-        }}
+        onClose={() => setCompletedModalOpen(false)}
         athleteName={currentPerson.name}
         workoutTitle={todayWorkout.title}
-        workoutSeconds={workoutSeconds}
-        completedSets={completedSetsToday}
-        totalSets={totalSetsToday}
+        workoutSeconds={completedSummary?.durationSeconds || workoutSeconds}
+        completedSets={completedSummary?.completedSets || completedSetsToday}
+        totalSets={completedSummary?.totalSets || totalSetsToday}
         accentColor={accentColor}
+        completedExercisesCount={completedSummary?.completedExercisesCount}
+        totalExercisesCount={todayWorkout.exercises.length}
+        skippedExercises={completedSummary?.skippedExercises}
+        totalWeightVolumeKg={completedSummary?.totalWeightVolumeKg}
+        caloriesBurned={watchCalories || Math.round((completedSummary?.durationSeconds || workoutSeconds) * 0.12)}
+      />
+
+      {/* CONSOLE FLUTUANTE INFERIOR COCKPIT */}
+      <WorkoutCockpit
+        workoutActive={workoutActive}
+        workoutSeconds={workoutSeconds}
+        onToggleWorkout={() => setWorkoutActive((v) => !v)}
+        restActive={restActive}
+        restSeconds={restSeconds}
+        onStartRest={startRest}
+        accentColor={accentColor}
+        canFinishWorkout={workoutSeconds > 0 || completedSetsToday > 0}
+        onFinishWorkout={() => {
+          handleFinishGuidedWorkout({
+            completedExercisesCount: todayWorkout.exercises.length,
+            skippedExercises: [],
+            totalWeightVolumeKg: 0,
+            durationSeconds: workoutSeconds,
+            completedSets: completedSetsToday,
+            totalSets: totalSetsToday
+          });
+        }}
+        viewTab={viewTab}
+        onSelectTab={setViewTab}
       />
     </div>
   );

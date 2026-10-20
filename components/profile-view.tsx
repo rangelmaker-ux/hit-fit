@@ -7,7 +7,8 @@ import {
   Trash2,
   Shield,
   UsersRound,
-  Lock
+  Lock,
+  LogOut
 } from 'lucide-react';
 import { getAvatar, saveAvatar, deleteAvatar, compressImageFile } from '@/lib/avatar-storage';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -23,6 +24,7 @@ interface ProfileViewProps {
   currentWeek: string;
   savedSets: Record<string, { done: boolean; weightKg?: string }>;
   onAvatarUpdated?: () => void;
+  onLogout?: () => void;
 }
 
 export function ProfileView({
@@ -33,7 +35,8 @@ export function ProfileView({
   people,
   currentWeek,
   savedSets,
-  onAvatarUpdated
+  onAvatarUpdated,
+  onLogout
 }: ProfileViewProps) {
   const isGeic = athleteName.toLowerCase().includes('geic');
 
@@ -407,6 +410,19 @@ export function ProfileView({
           accentColor={accentColor}
         />
       </div>
+
+      {/* BOTÃO DE LOGOUT / SAIR DA CONTA */}
+      {onLogout && (
+        <div className="pt-2">
+          <button
+            onClick={onLogout}
+            className="w-full py-3.5 px-4 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 font-mono font-bold text-xs flex items-center justify-center gap-2 tap-haptic transition-colors"
+          >
+            <LogOut size={15} />
+            <span>Encerrar Sessão (Sair da Conta)</span>
+          </button>
+        </div>
+      )}
 
     </div>
   );
