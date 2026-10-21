@@ -227,6 +227,38 @@ export default function Home() {
         }
         return prev;
       });
+
+      // 4. Reconcilia histórico de pesagens (weightHistory) e peso atual
+      if (athlete?.weightHistory && Array.isArray(athlete.weightHistory)) {
+        try {
+          const localStored = localStorage.getItem(`hitfit-weight-history-${user.id}`);
+          const localList: Array<{ id: string; date: string; weightKg: number; notes?: string }> = localStored
+            ? JSON.parse(localStored)
+            : [];
+          const recordMap = new Map<string, { id: string; date: string; weightKg: number; notes?: string }>();
+          if (Array.isArray(localList)) {
+            localList.forEach((r) => { if (r && r.id) recordMap.set(r.id, r); });
+          }
+          athlete.weightHistory.forEach((r) => { if (r && r.id) recordMap.set(r.id, r); });
+          const merged = Array.from(recordMap.values()).sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          localStorage.setItem(`hitfit-weight-history-${user.id}`, JSON.stringify(merged));
+        } catch {}
+      }
+
+      if (partner?.weightHistory && Array.isArray(partner.weightHistory) && partnerPerson) {
+        try {
+          localStorage.setItem(`hitfit-weight-history-${partnerPerson.id}`, JSON.stringify(partner.weightHistory));
+        } catch {}
+      }
+
+      if (athlete?.currentWeightKg) {
+        localStorage.setItem(`hitfit-weight-${user.id}`, String(athlete.currentWeightKg));
+      }
+      if (partner?.currentWeightKg && partnerPerson) {
+        localStorage.setItem(`hitfit-weight-${partnerPerson.id}`, String(partner.currentWeightKg));
+      }
     } catch {}
   }, []);
 
@@ -468,6 +500,14 @@ export default function Home() {
   const handleLogout = () => {
     logoutAthlete();
     setCurrentUser(null);
+    setWorkoutActive(false);
+    setWorkoutSeconds(0);
+    setRestActive(false);
+    setSelectedExercise(null);
+    setCompletedModalOpen(false);
+    setWatchModalOpen(false);
+    setSavedSets({});
+    setProfileVariants({});
   };
 
   // Biometria Unificada com Sincronização em Tempo Real (Single Source of Truth)

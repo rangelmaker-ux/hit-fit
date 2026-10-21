@@ -34,11 +34,11 @@ export function ExerciseDetailModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-0 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-0 sm:p-4 overflow-y-auto overflow-x-hidden"
       onClick={onClose}
     >
       <div 
-        className="relative w-full max-w-lg bg-[#0d100d] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto text-neutral-100 flex flex-col gap-4"
+        className="relative w-full max-w-lg bg-[#0d100d] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto text-neutral-100 flex flex-col gap-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))] box-border"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

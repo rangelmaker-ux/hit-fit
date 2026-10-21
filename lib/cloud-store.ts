@@ -145,24 +145,20 @@ const inMemoryAthleteData = new Map<string, StoredAthleteData>();
  */
 export async function createAtomicUserAccount(user: StoredUserAccount): Promise<boolean> {
   if (isCloudConfigured()) {
-    try {
-      const userJson = JSON.stringify(user);
-      const result = await kvExecute('SET', `hitfit:user:${user.id}`, userJson, 'NX');
-      if (result === 'OK' || result === true) {
-        await kvExecute('SET', `hitfit:user:${user.username}`, userJson);
-        if (user.id === 'person-geicsania') {
-          await kvExecute('SET', 'hitfit:user:jack', userJson);
-          await kvExecute('SET', 'hitfit:user:geicsania', userJson);
-        }
-        return true;
+    const userJson = JSON.stringify(user);
+    const result = await kvExecute('SET', `hitfit:user:${user.id}`, userJson, 'NX');
+    if (result === 'OK' || result === true) {
+      await kvExecute('SET', `hitfit:user:${user.username}`, userJson);
+      if (user.id === 'person-geicsania') {
+        await kvExecute('SET', 'hitfit:user:jack', userJson);
+        await kvExecute('SET', 'hitfit:user:geicsania', userJson);
       }
-      return false;
-    } catch {
-      // Fallback para memória em caso de latência/rede
+      return true;
     }
+    return false;
   }
 
-  // Fallback em memória (quando Upstash KV não estiver configurado)
+  // Fallback em memória (APENAS em ambiente local de teste onde o KV não estiver configurado)
   if (inMemoryUsers.has(user.id)) return false;
   inMemoryUsers.set(user.id, user);
   inMemoryUsers.set(user.username, user);
@@ -178,18 +174,14 @@ export async function createAtomicUserAccount(user: StoredUserAccount): Promise<
  */
 export async function updateUserAccount(user: StoredUserAccount): Promise<void> {
   if (isCloudConfigured()) {
-    try {
-      const userJson = JSON.stringify(user);
-      await kvExecute('SET', `hitfit:user:${user.id}`, userJson);
-      await kvExecute('SET', `hitfit:user:${user.username}`, userJson);
-      if (user.id === 'person-geicsania') {
-        await kvExecute('SET', 'hitfit:user:jack', userJson);
-        await kvExecute('SET', 'hitfit:user:geicsania', userJson);
-      }
-      return;
-    } catch {
-      // Fallback
+    const userJson = JSON.stringify(user);
+    await kvExecute('SET', `hitfit:user:${user.id}`, userJson);
+    await kvExecute('SET', `hitfit:user:${user.username}`, userJson);
+    if (user.id === 'person-geicsania') {
+      await kvExecute('SET', 'hitfit:user:jack', userJson);
+      await kvExecute('SET', 'hitfit:user:geicsania', userJson);
     }
+    return;
   }
 
   inMemoryUsers.set(user.id, user);
@@ -212,19 +204,16 @@ export async function getUserAccount(idOrUsername: string): Promise<StoredUserAc
   }
 
   if (isCloudConfigured()) {
-    try {
-      const raw = await kvExecute('GET', `hitfit:user:${clean}`);
-      if (raw) {
-        const user = typeof raw === 'string' ? JSON.parse(raw) : (raw as StoredUserAccount);
-        if (user && user.id === 'person-geicsania') {
-          user.name = 'Jack';
-          user.username = 'jack';
-        }
-        return user;
+    const raw = await kvExecute('GET', `hitfit:user:${clean}`);
+    if (raw) {
+      const user = typeof raw === 'string' ? JSON.parse(raw) : (raw as StoredUserAccount);
+      if (user && user.id === 'person-geicsania') {
+        user.name = 'Jack';
+        user.username = 'jack';
       }
-    } catch {
-      // Fallback
+      return user;
     }
+    return null;
   }
 
   const user = inMemoryUsers.get(clean) || null;
@@ -240,15 +229,12 @@ export async function getUserAccount(idOrUsername: string): Promise<StoredUserAc
  */
 export async function saveAthleteData(data: StoredAthleteData): Promise<void> {
   if (isCloudConfigured()) {
-    try {
-      const dataJson = JSON.stringify(data);
-      const result = await kvExecute('SET', `hitfit:data:${data.userId}`, dataJson);
-      if (result === 'OK' || result === true || typeof result === 'string') {
-        return;
-      }
-    } catch {
-      // Fallback
+    const dataJson = JSON.stringify(data);
+    const result = await kvExecute('SET', `hitfit:data:${data.userId}`, dataJson);
+    if (result === 'OK' || result === true || typeof result === 'string') {
+      return;
     }
+    throw new PersistentStorageWriteError(`Resposta inesperada do banco permanente ao gravar dados: ${String(result)}`);
   }
 
   inMemoryAthleteData.set(data.userId, data);
@@ -259,14 +245,11 @@ export async function saveAthleteData(data: StoredAthleteData): Promise<void> {
  */
 export async function getAthleteData(userId: string): Promise<StoredAthleteData | null> {
   if (isCloudConfigured()) {
-    try {
-      const raw = await kvExecute('GET', `hitfit:data:${userId}`);
-      if (raw) {
-        return typeof raw === 'string' ? JSON.parse(raw) : (raw as StoredAthleteData);
-      }
-    } catch {
-      // Fallback
+    const raw = await kvExecute('GET', `hitfit:data:${userId}`);
+    if (raw) {
+      return typeof raw === 'string' ? JSON.parse(raw) : (raw as StoredAthleteData);
     }
+    return null;
   }
 
   return inMemoryAthleteData.get(userId) || null;

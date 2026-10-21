@@ -323,58 +323,12 @@ export default async function handler(req: Request) {
       );
     }
 
-    let user = await getUserAccount(targetId);
+    const user = await getUserAccount(targetId);
     if (!user) {
-      if (!/^\d{6}$/.test(password.trim())) {
-        return jsonResponse(400, {
-          error: 'O PIN deve conter exatamente 6 dígitos numéricos.',
-          code: 'INVALID_PIN'
-        });
-      }
-
-      const now = new Date().toISOString();
-      const saltRangel = generateSalt(16);
-      const hashRangel = await hashPassword(password.trim(), saltRangel);
-
-      const saltJack = generateSalt(16);
-      const hashJack = await hashPassword(password.trim(), saltJack);
-
-      const accountRangel: StoredUserAccount = {
-        id: 'person-rangel',
-        username: 'rangel',
-        name: 'Rangel',
-        birthDate: '',
-        age: 0,
-        initialWeightKg: null,
-        heightCm: null,
-        goal: 'Emagrecimento & Definição',
-        activityLevel: 'Moderado (3-4x por semana)',
-        salt: saltRangel,
-        passwordHash: hashRangel,
-        createdAt: now,
-        updatedAt: now
-      };
-
-      const accountJack: StoredUserAccount = {
-        id: 'person-geicsania',
-        username: 'jack',
-        name: 'Jack',
-        birthDate: '',
-        age: 0,
-        initialWeightKg: null,
-        heightCm: null,
-        goal: 'Recomposição Corporal',
-        activityLevel: 'Moderado (3-4x por semana)',
-        salt: saltJack,
-        passwordHash: hashJack,
-        createdAt: now,
-        updatedAt: now
-      };
-
-      await createAtomicUserAccount(accountRangel);
-      await createAtomicUserAccount(accountJack);
-
-      user = targetId === 'person-rangel' ? accountRangel : accountJack;
+      return jsonResponse(404, {
+        error: 'Conta de atleta não encontrada no banco de dados. O provisionamento inicial seguro deve ser realizado com a chave de administrador.',
+        code: 'USER_NOT_FOUND'
+      });
     }
 
     const isMatch = await verifyPassword(password.trim(), user.salt, user.passwordHash);
@@ -456,10 +410,12 @@ export default async function handler(req: Request) {
       ? body.birthDate.trim()
       : user.birthDate;
 
-    // Apenas altera initialWeightKg se explicitamente fornecido
-    const validInitialWeight = body.initialWeightKg !== undefined && body.initialWeightKg !== null
-      ? Number(body.initialWeightKg)
-      : user.initialWeightKg;
+    // Preservação imutável do peso inicial de referência (ponto de partida do atleta)
+    const validInitialWeight = user.initialWeightKg !== null && user.initialWeightKg > 0
+      ? user.initialWeightKg
+      : (body.initialWeightKg !== undefined && body.initialWeightKg !== null && Number(body.initialWeightKg) > 0
+        ? Number(body.initialWeightKg)
+        : user.initialWeightKg);
 
     const validHeight = body.heightCm !== undefined && body.heightCm !== null
       ? Number(body.heightCm)

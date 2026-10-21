@@ -35,11 +35,11 @@ export function WatchModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto overflow-x-hidden"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm bg-[#0B0E15] border border-[rgba(255,255,255,0.1)] rounded-3xl p-5 shadow-2xl flex flex-col gap-4 text-neutral-100"
+        className="w-full max-w-sm bg-[#0B0E15] border border-[rgba(255,255,255,0.1)] rounded-3xl p-5 shadow-2xl flex flex-col gap-4 text-neutral-100 box-border pb-[max(1.25rem,env(safe-area-inset-bottom))]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

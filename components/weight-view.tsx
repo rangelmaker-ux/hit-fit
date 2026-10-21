@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Scale, Plus, Trash2, TrendingDown, TrendingUp, Calendar } from 'lucide-react';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { saveUnifiedBiometrics } from '@/lib/biometrics';
-import { AuthenticatedUser } from '@/lib/auth-client';
+import { AuthenticatedUser, pushSyncData } from '@/lib/auth-client';
 
 export interface WeightRecord {
   id: string;
@@ -86,30 +86,68 @@ export function WeightView({
       weightKg: inputWeight
     };
 
-    setHistory((prev) => [newRecord, ...prev]);
+    const nextHistory = [newRecord, ...history];
+    setHistory(nextHistory);
+    try {
+      localStorage.setItem(`hitfit-weight-history-${profileId}`, JSON.stringify(nextHistory));
+    } catch {}
+
     await saveUnifiedBiometrics(
       profileId,
-      { currentWeightKg: inputWeight, weightKg: inputWeight },
+      {
+        currentWeightKg: inputWeight,
+        weightKg: inputWeight,
+        weightHistory: nextHistory
+      },
       currentUser,
       onUserUpdated
     );
+
+    if (currentUser && !isReadOnly) {
+      await pushSyncData({
+        userId: currentUser.id,
+        currentWeightKg: inputWeight,
+        weightHistory: nextHistory
+      });
+    }
+
     onWeightUpdated?.(inputWeight);
     setInputWeight(null);
     setIsAdding(false);
   };
 
-  const handleDeleteWeight = (id: string) => {
+  const handleDeleteWeight = async (id: string) => {
     if (isReadOnly) return;
     const nextHistory = history.filter((r) => r.id !== id);
     setHistory(nextHistory);
-    const newLatest = nextHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    try {
+      localStorage.setItem(`hitfit-weight-history-${profileId}`, JSON.stringify(nextHistory));
+    } catch {}
+
+    const nextSorted = [...nextHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const newLatest = nextSorted[0];
+    const weightToSave = newLatest ? newLatest.weightKg : null;
+
+    await saveUnifiedBiometrics(
+      profileId,
+      {
+        currentWeightKg: weightToSave,
+        weightKg: weightToSave,
+        weightHistory: nextHistory
+      },
+      currentUser,
+      onUserUpdated
+    );
+
+    if (currentUser && !isReadOnly) {
+      await pushSyncData({
+        userId: currentUser.id,
+        currentWeightKg: weightToSave,
+        weightHistory: nextHistory
+      });
+    }
+
     if (newLatest) {
-      saveUnifiedBiometrics(
-        profileId,
-        { currentWeightKg: newLatest.weightKg, weightKg: newLatest.weightKg },
-        currentUser,
-        onUserUpdated
-      );
       onWeightUpdated?.(newLatest.weightKg);
     }
   };

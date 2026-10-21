@@ -269,6 +269,7 @@ export async function saveUnifiedBiometrics(
     goal?: string;
     activityLevel?: string;
     avatarBase64?: string | null;
+    weightHistory?: Array<{ id: string; date: string; weightKg: number; notes?: string }>;
   },
   currentUser?: AuthenticatedUser | null,
   onUserUpdated?: (user: AuthenticatedUser) => void
@@ -340,7 +341,8 @@ export async function saveUnifiedBiometrics(
       heightCm: updated.heightCm > 0 ? updated.heightCm : null,
       goal: updated.goal,
       activityLevel: updated.activityLevel,
-      avatarBase64: data.avatarBase64
+      avatarBase64: data.avatarBase64,
+      weightHistory: data.weightHistory
     });
 
     if (!res.success) {

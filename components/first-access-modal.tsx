@@ -125,8 +125,8 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-      <div className="w-full max-w-lg bg-[#0E121A] border border-white/10 rounded-3xl p-6 shadow-2xl my-8">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto overflow-x-hidden animate-in fade-in">
+      <div className="w-full max-w-lg bg-[#0E121A] border border-white/10 rounded-3xl p-6 shadow-2xl my-8 box-border pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         
         {/* CABEÇALHO */}
         <div className="flex items-center gap-3 mb-4 pb-4 border-b border-white/10">

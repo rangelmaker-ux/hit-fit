@@ -212,6 +212,14 @@ export async function updateAthleteProfile(payload: {
 export function logoutAthlete(): void {
   setStoredToken(null);
   setStoredUser(null);
+  pendingSyncPayload = null;
+  persistPendingSync(null);
+  if (syncRetryTimer) {
+    clearTimeout(syncRetryTimer);
+    syncRetryTimer = null;
+  }
+  isSyncProcessing = false;
+  notifySyncStatus('synced');
 }
 
 /**
@@ -296,13 +304,49 @@ function notifySyncStatus(status: SyncStatusType) {
   });
 }
 
+const PENDING_SYNC_STORAGE_KEY = 'hitfit_pending_sync_queue_v2';
+
+function loadPendingSync(): Record<string, unknown> | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(PENDING_SYNC_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistPendingSync(payload: Record<string, unknown> | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (payload && Object.keys(payload).length > 0) {
+      localStorage.setItem(PENDING_SYNC_STORAGE_KEY, JSON.stringify(payload));
+    } else {
+      localStorage.removeItem(PENDING_SYNC_STORAGE_KEY);
+    }
+  } catch {}
+}
+
 // Fila resiliente de sincronização em segundo plano (evita concorrência e perda de dados offline)
 let isSyncProcessing = false;
-let pendingSyncPayload: Record<string, unknown> | null = null;
+let pendingSyncPayload: Record<string, unknown> | null = typeof window !== 'undefined' ? loadPendingSync() : null;
 let syncRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    const pending = loadPendingSync();
+    if (pending) {
+      pendingSyncPayload = { ...(pendingSyncPayload || {}), ...pending };
+      processSyncQueue();
+    }
+  });
+}
 
 async function processSyncQueue(): Promise<void> {
   if (isSyncProcessing) return;
+  if (!pendingSyncPayload) {
+    pendingSyncPayload = loadPendingSync();
+  }
   if (!pendingSyncPayload) {
     notifySyncStatus('synced');
     return;
@@ -310,7 +354,6 @@ async function processSyncQueue(): Promise<void> {
 
   const token = getStoredToken();
   if (!token) {
-    pendingSyncPayload = null;
     notifySyncStatus('offline');
     return;
   }
@@ -320,6 +363,7 @@ async function processSyncQueue(): Promise<void> {
 
   const payloadToSend = { ...pendingSyncPayload };
   pendingSyncPayload = null;
+  persistPendingSync(null);
 
   try {
     const res = await fetch('/api/sync', {
@@ -348,6 +392,7 @@ async function processSyncQueue(): Promise<void> {
       // Reenfileira para retry se não houver um novo payload sobrescrevendo
       if (!pendingSyncPayload) {
         pendingSyncPayload = payloadToSend;
+        persistPendingSync(pendingSyncPayload);
         if (!syncRetryTimer) {
           syncRetryTimer = setTimeout(() => {
             syncRetryTimer = null;
@@ -362,6 +407,7 @@ async function processSyncQueue(): Promise<void> {
     isSyncProcessing = false;
     if (!pendingSyncPayload) {
       pendingSyncPayload = payloadToSend;
+      persistPendingSync(pendingSyncPayload);
       if (!syncRetryTimer) {
         syncRetryTimer = setTimeout(() => {
           syncRetryTimer = null;
@@ -379,14 +425,21 @@ export async function pushSyncData(payload: Record<string, unknown>): Promise<bo
   const token = getStoredToken();
   if (!token) {
     notifySyncStatus('offline');
+    // Salva na fila pendente para quando o usuário reconectar ou autenticar
+    pendingSyncPayload = {
+      ...(pendingSyncPayload || loadPendingSync() || {}),
+      ...payload
+    };
+    persistPendingSync(pendingSyncPayload);
     return false;
   }
 
   // Agrega payload pendente com o novo para não perder campos parciais
   pendingSyncPayload = {
-    ...(pendingSyncPayload || {}),
+    ...(pendingSyncPayload || loadPendingSync() || {}),
     ...payload
   };
+  persistPendingSync(pendingSyncPayload);
 
   processSyncQueue();
   return true;

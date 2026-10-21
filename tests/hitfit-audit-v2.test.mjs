@@ -12,10 +12,7 @@ import {
   WORKOUT_DAYS
 } from '../lib/workout-data.ts';
 
-import {
-  getVariantRegistryItem,
-  VARIANT_REGISTRY
-} from '../lib/animation-registry.ts';
+
 
 // ============================================================================
 // 1. Variantes apenas locais -> Contrato de nuvem e persistência durável

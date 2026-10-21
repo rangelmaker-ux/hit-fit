@@ -40,6 +40,9 @@ self.addEventListener('fetch', (event) => {
   // Não intercepta requisições de outros domínios
   if (url.origin !== self.location.origin) return;
 
+  // SEGURANÇA E CONSISTÊNCIA DE DADOS: NUNCA interceptar nem cachear rotas dinâmicas de API
+  if (url.pathname.startsWith('/api/')) return;
+
   const isNavigation = event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html');
 
   if (isNavigation) {
