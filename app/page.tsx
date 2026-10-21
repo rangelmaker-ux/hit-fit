@@ -80,7 +80,7 @@ export default function Home() {
   const [healthSubTab, setHealthSubTab] = useState<HealthSubTab>('alimentacao');
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
-  const [workouts] = useState<DayWorkout[]>(WORKOUT_DAYS);
+  const [workouts, setWorkouts] = useState<DayWorkout[]>(WORKOUT_DAYS);
   const [savedSets, setSavedSets] = useState<Record<string, SavedSetState>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -228,6 +228,38 @@ export default function Home() {
         pushSyncData({ userId: currentUser.id, savedSets: updated });
       }
       return updated;
+    });
+  };
+
+  const handleSwapExercise = (targetAltName: string) => {
+    if (!selectedExercise) return;
+    setWorkouts((prevWorkouts) => {
+      return prevWorkouts.map((day) => ({
+        ...day,
+        exercises: day.exercises.map((ex) => {
+          if (ex.id !== selectedExercise.id) return ex;
+          const altItem = ex.machines.alternatives.find((a) => a.name === targetAltName);
+          const previousPrimary = ex.machines.primary;
+          const newAlternatives = [
+            ...ex.machines.alternatives.filter((a) => a.name !== targetAltName),
+            { name: previousPrimary.name, description: previousPrimary.description }
+          ];
+          const updated: Exercise = {
+            ...ex,
+            name: targetAltName,
+            machines: {
+              primary: {
+                name: targetAltName,
+                description: altItem?.description || ex.machines.primary.description,
+                settingTips: ex.machines.primary.settingTips
+              },
+              alternatives: newAlternatives
+            }
+          };
+          setSelectedExercise(updated);
+          return updated;
+        })
+      }));
     });
   };
 
@@ -576,7 +608,7 @@ export default function Home() {
           exercise={selectedExercise}
           accentColor={accentColor}
           onClose={() => setSelectedExercise(null)}
-          onSwapExercise={() => {}}
+          onSwapExercise={handleSwapExercise}
         />
       )}
 

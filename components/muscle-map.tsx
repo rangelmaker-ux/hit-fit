@@ -16,7 +16,12 @@ export function MuscleMap({
   viewMode = 'both'
 }: MuscleMapProps) {
   const isFrontActive = (part: string) => activeFrontParts.includes(part);
-  const isBackActive = (part: string) => activeBackParts.includes(part);
+  const isBackActive = (part: string) => {
+    if (part === 'traps') {
+      return activeBackParts.includes('traps') || activeBackParts.includes('midback');
+    }
+    return activeBackParts.includes(part);
+  };
 
   const activeFill = accentColor;
   const activeGlow = `${accentColor}88`;

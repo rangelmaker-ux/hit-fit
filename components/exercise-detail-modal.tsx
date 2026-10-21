@@ -117,6 +117,7 @@ export function ExerciseDetailModal({
           <div className="flex flex-col gap-4 animate-in fade-in duration-200">
             {/* Animação 2D do Movimento */}
             <ExerciseAnimation
+              key={`${exercise.id}-${exercise.animationKey}`}
               animationKey={exercise.animationKey}
               exerciseName={exercise.name}
               accentColor={accentColor}

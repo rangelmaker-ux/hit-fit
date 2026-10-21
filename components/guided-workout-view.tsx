@@ -297,6 +297,7 @@ export function GuidedWorkoutView({
         {/* ANIMAÇÃO BIOMECÂNICA 2D VETORIAL */}
         <div className="w-full rounded-2xl overflow-hidden bg-black/40 border border-white/5 p-2 z-10">
           <ExerciseAnimation
+            key={`${currentEx.id}-${currentEx.animationKey}`}
             animationKey={currentEx.animationKey}
             exerciseName={currentEx.name}
             accentColor={accentColor}
