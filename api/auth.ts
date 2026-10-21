@@ -65,6 +65,7 @@ export default async function handler(req: Request) {
       }
 
       const user = await getUserAccount(session.userId);
+      const athleteData = user ? await getAthleteData(user.id) : null;
       const isComplete = Boolean(
         user && user.birthDate && user.initialWeightKg !== null && user.heightCm !== null
       );
@@ -81,6 +82,8 @@ export default async function handler(req: Request) {
               age: user.age,
               birthDate: user.birthDate,
               initialWeightKg: user.initialWeightKg,
+              currentWeightKg: athleteData?.currentWeightKg ?? user.initialWeightKg,
+              targetWeightKg: athleteData?.weightGoal?.targetKg ?? null,
               heightCm: user.heightCm,
               goal: user.goal,
               activityLevel: user.activityLevel,
@@ -394,6 +397,7 @@ export default async function handler(req: Request) {
       role: assignedRole
     });
 
+    const athleteData = await getAthleteData(user.id);
     const isComplete = Boolean(
       user.birthDate && user.initialWeightKg !== null && user.heightCm !== null
     );
@@ -409,6 +413,8 @@ export default async function handler(req: Request) {
         age: user.age,
         birthDate: user.birthDate,
         initialWeightKg: user.initialWeightKg,
+        currentWeightKg: athleteData?.currentWeightKg ?? user.initialWeightKg,
+        targetWeightKg: athleteData?.weightGoal?.targetKg ?? null,
         heightCm: user.heightCm,
         goal: user.goal,
         activityLevel: user.activityLevel,
@@ -450,7 +456,8 @@ export default async function handler(req: Request) {
       ? body.birthDate.trim()
       : user.birthDate;
 
-    const validWeight = body.initialWeightKg !== undefined && body.initialWeightKg !== null
+    // Apenas altera initialWeightKg se explicitamente fornecido
+    const validInitialWeight = body.initialWeightKg !== undefined && body.initialWeightKg !== null
       ? Number(body.initialWeightKg)
       : user.initialWeightKg;
 
@@ -465,7 +472,7 @@ export default async function handler(req: Request) {
       ...user,
       birthDate: validBirthDate,
       age,
-      initialWeightKg: validWeight,
+      initialWeightKg: validInitialWeight,
       heightCm: validHeight,
       goal: typeof body.goal === 'string' && body.goal.trim() ? body.goal.trim() : user.goal,
       activityLevel: typeof body.activityLevel === 'string' && body.activityLevel.trim() ? body.activityLevel.trim() : user.activityLevel,
@@ -474,12 +481,12 @@ export default async function handler(req: Request) {
 
     await updateUserAccount(updatedUser);
 
-    // Se forneceu peso inicial ou meta, atualiza também a ficha do atleta
+    // Carrega athleteData existente ou inicializa
     const athleteData = (await getAthleteData(targetUserId)) || {
       userId: targetUserId,
-      currentWeightKg: validWeight,
+      currentWeightKg: validInitialWeight,
       weightHistory: [],
-      weightGoal: { initialKg: validWeight, currentKg: validWeight, targetKg: null, objective: updatedUser.goal, updatedAt: now },
+      weightGoal: { initialKg: validInitialWeight, currentKg: validInitialWeight, targetKg: null, objective: updatedUser.goal, updatedAt: now },
       waterLogs: {},
       nutritionDays: {},
       savedSets: {},
@@ -487,25 +494,38 @@ export default async function handler(req: Request) {
       updatedAt: now
     };
 
+    // Atualização desacoplada de peso atual (NÃO altera initialWeightKg)
+    if (body.currentWeightKg !== undefined && body.currentWeightKg !== null) {
+      const parsedCurrent = Number(body.currentWeightKg);
+      athleteData.currentWeightKg = parsedCurrent;
+      athleteData.weightGoal.currentKg = parsedCurrent;
+    } else if (athleteData.currentWeightKg === null && validInitialWeight !== null) {
+      athleteData.currentWeightKg = validInitialWeight;
+      athleteData.weightGoal.currentKg = validInitialWeight;
+    }
+
+    if (body.initialWeightKg !== undefined && body.initialWeightKg !== null) {
+      athleteData.weightGoal.initialKg = Number(body.initialWeightKg);
+    }
+
     if (body.targetWeightKg !== undefined && body.targetWeightKg !== null) {
       athleteData.weightGoal.targetKg = Number(body.targetWeightKg);
     }
-    if (validWeight !== null) {
-      athleteData.currentWeightKg = validWeight;
-      if (athleteData.weightHistory.length === 0) {
-        athleteData.weightHistory.push({
-          id: `weight-${Date.now()}`,
-          date: now.split('T')[0],
-          weightKg: validWeight,
-          notes: 'Pesagem inicial do perfil'
-        });
-      }
+
+    if (Array.isArray(body.weightHistory)) {
+      athleteData.weightHistory = body.weightHistory;
     }
+
     if (body.avatarBase64 !== undefined) {
       athleteData.avatarBase64 = body.avatarBase64 as string | null;
     }
+
     athleteData.updatedAt = now;
     await saveAthleteData(athleteData);
+
+    const isComplete = Boolean(
+      updatedUser.birthDate && updatedUser.initialWeightKg !== null && updatedUser.heightCm !== null
+    );
 
     return jsonResponse(200, {
       success: true,
@@ -518,10 +538,12 @@ export default async function handler(req: Request) {
         age: updatedUser.age,
         birthDate: updatedUser.birthDate,
         initialWeightKg: updatedUser.initialWeightKg,
+        currentWeightKg: athleteData.currentWeightKg ?? updatedUser.initialWeightKg,
+        targetWeightKg: athleteData.weightGoal.targetKg ?? null,
         heightCm: updatedUser.heightCm,
         goal: updatedUser.goal,
         activityLevel: updatedUser.activityLevel,
-        needsProfileSetup: false
+        needsProfileSetup: !isComplete
       }
     });
   }

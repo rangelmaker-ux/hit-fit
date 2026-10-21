@@ -11,6 +11,8 @@ export interface AuthenticatedUser {
   age: number;
   birthDate?: string;
   initialWeightKg: number | null;
+  currentWeightKg?: number | null;
+  targetWeightKg?: number | null;
   heightCm: number | null;
   goal: string;
   activityLevel: string;
@@ -164,13 +166,15 @@ export async function loginAthlete(
  */
 export async function updateAthleteProfile(payload: {
   userId: string;
-  birthDate: string;
-  initialWeightKg: number | null;
-  heightCm: number | null;
+  birthDate?: string;
+  initialWeightKg?: number | null;
+  currentWeightKg?: number | null;
+  heightCm?: number | null;
   targetWeightKg?: number | null;
-  goal: string;
-  activityLevel: string;
+  goal?: string;
+  activityLevel?: string;
   avatarBase64?: string | null;
+  weightHistory?: Array<{ id: string; date: string; weightKg: number; notes?: string }>;
 }): Promise<{ success: boolean; user?: AuthenticatedUser; error?: string }> {
   const token = getStoredToken();
   if (!token) return { success: false, error: 'Sessão não autenticada.' };

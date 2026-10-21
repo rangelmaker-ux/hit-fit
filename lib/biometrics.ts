@@ -140,17 +140,15 @@ export function getUnifiedBiometrics(
   const birthDate = (isSelf && currentUser?.birthDate) || (cachedBio as { birthDate?: string })?.birthDate || '';
   const age = birthDate ? calculateAge(birthDate) : (cachedBio.age || (isSelf ? currentUser?.age : 0) || 0);
 
-  const initialWeight = (isSelf && currentUser?.initialWeightKg) || cachedBio.weightKg || cachedWeight || 0;
-  const currentWeight = cachedWeight > 0 ? cachedWeight : initialWeight;
+  const initialWeight = (isSelf && currentUser?.initialWeightKg) || cachedBio.weightKg || 0;
+  const currentWeight = (isSelf && currentUser?.currentWeightKg) || cachedWeight || initialWeight || 0;
 
   const heightCmRaw = (isSelf && currentUser?.heightCm) || cachedBio.heightCm || 0;
   const parsedHeight = parseHeight(heightCmRaw);
   const heightCm = parsedHeight.cm || 0;
   const heightMeters = parsedHeight.meters || 0;
 
-  const targetWeight = cachedGoalWeight > 0
-    ? cachedGoalWeight
-    : (cachedBio.targetWeightKg || 0);
+  const targetWeight = (isSelf && currentUser?.targetWeightKg) || cachedGoalWeight || (cachedBio.targetWeightKg || 0);
 
   const goal = (cachedBio.goal as 'fat_loss' | 'recomp' | 'hypertrophy') || defaultGoal;
   const activityLevel = (isSelf && currentUser?.activityLevel) || 'Moderado (3-4x por semana)';
@@ -176,8 +174,87 @@ export function getUnifiedBiometrics(
   };
 }
 
+export interface SaveBiometricsResult {
+  success: boolean;
+  biometrics: UnifiedBiometrics;
+  user?: AuthenticatedUser | null;
+  error?: string;
+  offline?: boolean;
+}
+
+const SYNC_QUEUE_KEY = 'hitfit_pending_sync_queue';
+
+export function queuePendingSync(profileId: string, data: Record<string, unknown>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    const queue = raw ? JSON.parse(raw) : [];
+    queue.push({
+      profileId,
+      data,
+      queuedAt: new Date().toISOString()
+    });
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+  } catch {}
+}
+
+export function getPendingSyncCount(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    const queue = raw ? JSON.parse(raw) : [];
+    return Array.isArray(queue) ? queue.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function applyLocalBiometricsCache(profileId: string, updated: UnifiedBiometrics): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const bioPayload: UserBioProfile & { birthDate?: string } = {
+      name: updated.athleteName,
+      gender: updated.gender,
+      weightKg: updated.currentWeightKg,
+      heightCm: updated.heightCm,
+      age: updated.age,
+      birthDate: updated.birthDate,
+      targetWeightKg: updated.targetWeightKg,
+      goal: updated.goal,
+      activityFactor: 1.55,
+      customDailyDeficit: updated.goal === 'fat_loss' ? 450 : 350,
+      waterGoalMl: updated.waterGoalMl
+    };
+    localStorage.setItem(`hitfit-bio-${profileId}`, JSON.stringify(bioPayload));
+
+    if (updated.currentWeightKg > 0) {
+      localStorage.setItem(`hitfit-weight-${profileId}`, String(updated.currentWeightKg));
+    }
+
+    if (updated.targetWeightKg > 0) {
+      localStorage.setItem(`hitfit-goal-weight-${profileId}`, String(updated.targetWeightKg));
+      localStorage.setItem(
+        `hitfit-goal-${profileId}`,
+        JSON.stringify({
+          initialWeightKg: updated.initialWeightKg,
+          targetWeightKg: updated.targetWeightKg,
+          objective: updated.goal,
+          updatedAt: new Date().toISOString()
+        })
+      );
+    }
+  } catch {}
+
+  window.dispatchEvent(
+    new CustomEvent(BIOMETRICS_EVENT, {
+      detail: { profileId, biometrics: updated }
+    })
+  );
+}
+
 /**
- * Salva e sincroniza os dados biométricos em TODAS as camadas (localStorage, sessão, nuvem e eventos)
+ * Salva e sincroniza os dados biométricos com confirmação de persistência durável no servidor.
+ * Desacopla peso atual, peso inicial e meta. Não injeta pesagens artificiais.
  */
 export async function saveUnifiedBiometrics(
   profileId: string,
@@ -195,7 +272,7 @@ export async function saveUnifiedBiometrics(
   },
   currentUser?: AuthenticatedUser | null,
   onUserUpdated?: (user: AuthenticatedUser) => void
-): Promise<UnifiedBiometrics> {
+): Promise<SaveBiometricsResult> {
   const current = getUnifiedBiometrics(profileId, currentUser);
 
   // Normalização de altura se fornecida
@@ -206,12 +283,23 @@ export async function saveUnifiedBiometrics(
     nextHeightCm = parseHeight(data.heightMeters).cm || current.heightCm;
   }
 
-  // Normalização de peso
-  const nextCurrentWeight = data.currentWeightKg ?? data.weightKg ?? current.currentWeightKg;
-  const nextInitialWeight = data.initialWeightKg ?? (current.initialWeightKg > 0 ? current.initialWeightKg : nextCurrentWeight);
-  const nextTargetWeight = data.targetWeightKg !== undefined ? (data.targetWeightKg || 0) : current.targetWeightKg;
+  // Desacoplamento estrito de peso:
+  // - initialWeightKg: só atualiza se explicitamente informado (ex: cadastro inicial)
+  // - currentWeightKg: atualiza quando uma pesagem é informada
+  // - targetWeightKg: atualiza quando a meta é ajustada, sem sobrescrever initialWeightKg
+  const nextInitialWeight = data.initialWeightKg !== undefined && data.initialWeightKg !== null
+    ? data.initialWeightKg
+    : current.initialWeightKg;
 
-  // Normalização de data de nascimento e idade
+  const nextCurrentWeight = data.currentWeightKg !== undefined && data.currentWeightKg !== null
+    ? data.currentWeightKg
+    : (data.weightKg !== undefined && data.weightKg !== null ? data.weightKg : current.currentWeightKg);
+
+  const nextTargetWeight = data.targetWeightKg !== undefined && data.targetWeightKg !== null
+    ? data.targetWeightKg
+    : current.targetWeightKg;
+
+  // Normalização de data de nascimento e idade civil
   const nextBirthDate = data.birthDate !== undefined ? data.birthDate : current.birthDate;
   const nextAge = nextBirthDate ? calculateAge(nextBirthDate) : current.age;
 
@@ -233,102 +321,64 @@ export async function saveUnifiedBiometrics(
     waterGoalMl: nextWater
   };
 
-  // 1. Atualiza chaves no LocalStorage
-  if (typeof window !== 'undefined') {
-    try {
-      // Bio para Nutrição e Perfil
-      const bioPayload: UserBioProfile & { birthDate?: string } = {
-        name: updated.athleteName,
-        gender: updated.gender,
-        weightKg: updated.currentWeightKg,
-        heightCm: updated.heightCm,
-        age: updated.age,
-        birthDate: updated.birthDate,
-        targetWeightKg: updated.targetWeightKg,
-        goal: updated.goal,
-        activityFactor: 1.55,
-        customDailyDeficit: updated.goal === 'fat_loss' ? 450 : 350,
-        waterGoalMl: updated.waterGoalMl
-      };
-      localStorage.setItem(`hitfit-bio-${profileId}`, JSON.stringify(bioPayload));
-
-      // Peso para Home e Rastreadores
-      if (updated.currentWeightKg > 0) {
-        localStorage.setItem(`hitfit-weight-${profileId}`, String(updated.currentWeightKg));
-      }
-
-      // Meta de peso
-      if (updated.targetWeightKg > 0) {
-        localStorage.setItem(`hitfit-goal-weight-${profileId}`, String(updated.targetWeightKg));
-        localStorage.setItem(
-          `hitfit-goal-${profileId}`,
-          JSON.stringify({
-            initialWeightKg: updated.initialWeightKg,
-            targetWeightKg: updated.targetWeightKg,
-            objective: updated.goal,
-            updatedAt: new Date().toISOString()
-          })
-        );
-      }
-
-      // Histórico de peso: garante que há um registro inicial com a data de hoje se o histórico estiver vazio
-      const historyKey = `hitfit-weight-history-${profileId}`;
-      const existingHistoryRaw = localStorage.getItem(historyKey);
-      let history = existingHistoryRaw ? JSON.parse(existingHistoryRaw) : [];
-      if (updated.currentWeightKg > 0) {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const hasToday = history.some((r: { date: string }) => r.date === todayStr);
-        if (!hasToday) {
-          history = [
-            {
-              id: `w-${Date.now()}`,
-              date: todayStr,
-              weightKg: updated.currentWeightKg,
-              notes: 'Pesagem registrada'
-            },
-            ...history
-          ];
-          localStorage.setItem(historyKey, JSON.stringify(history));
-        }
-      }
-    } catch {}
-
-    // Dispara evento global para que todas as abas e componentes atualizem seus estados imediatamente
-    window.dispatchEvent(
-      new CustomEvent(BIOMETRICS_EVENT, {
-        detail: { profileId, biometrics: updated }
-      })
-    );
-  }
-
-  // 2. Se for o próprio atleta logado, sincroniza com o backend /api/auth e sessão
   const isSelf = currentUser && (
     currentUser.id === profileId ||
     (profileId === 'person-geicsania' && currentUser.username === 'jack') ||
     (profileId === 'person-rangel' && currentUser.username === 'rangel')
   );
 
-  if (isSelf && currentUser) {
-    try {
-      const res = await updateAthleteProfile({
-        userId: currentUser.id,
-        birthDate: updated.birthDate,
-        initialWeightKg: updated.initialWeightKg,
-        heightCm: updated.heightCm,
-        targetWeightKg: updated.targetWeightKg,
-        goal: updated.goal,
-        activityLevel: updated.activityLevel,
-        avatarBase64: data.avatarBase64
-      });
+  let updatedUser: AuthenticatedUser | undefined;
 
-      if (res.success && res.user) {
-        setStoredUser(res.user);
-        onUserUpdated?.(res.user);
+  // 1. Se autenticado, confirma no servidor PRIMEIRO antes de consolidar localmente
+  if (isSelf && currentUser) {
+    const res = await updateAthleteProfile({
+      userId: currentUser.id,
+      birthDate: updated.birthDate,
+      initialWeightKg: updated.initialWeightKg > 0 ? updated.initialWeightKg : null,
+      currentWeightKg: updated.currentWeightKg > 0 ? updated.currentWeightKg : null,
+      targetWeightKg: updated.targetWeightKg > 0 ? updated.targetWeightKg : null,
+      heightCm: updated.heightCm > 0 ? updated.heightCm : null,
+      goal: updated.goal,
+      activityLevel: updated.activityLevel,
+      avatarBase64: data.avatarBase64
+    });
+
+    if (!res.success) {
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      if (isOffline) {
+        queuePendingSync(profileId, data);
+        applyLocalBiometricsCache(profileId, updated);
+        return {
+          success: true,
+          offline: true,
+          biometrics: updated,
+          user: currentUser
+        };
       }
-    } catch {}
+
+      // Rejeição ou erro do servidor: propaga o erro explicitamente
+      return {
+        success: false,
+        biometrics: current,
+        error: res.error || 'O servidor rejeitou a gravação dos dados biométricos.'
+      };
+    }
+
+    if (res.user) {
+      updatedUser = res.user;
+      setStoredUser(res.user);
+      onUserUpdated?.(res.user);
+    }
   }
 
-  return updated;
+  // 2. Com a confirmação do servidor (ou sem sessão ativa), aplica o cache local e emite o evento
+  applyLocalBiometricsCache(profileId, updated);
+
+  return {
+    success: true,
+    biometrics: updated,
+    user: updatedUser || currentUser || null
+  };
 }
 
 export { BIOMETRICS_EVENT };

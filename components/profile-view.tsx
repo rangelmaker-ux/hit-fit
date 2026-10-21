@@ -8,7 +8,9 @@ import {
   Shield,
   UsersRound,
   Lock,
-  LogOut
+  LogOut,
+  Calendar,
+  AlertCircle
 } from 'lucide-react';
 import { getAvatar, saveAvatar, deleteAvatar, compressImageFile } from '@/lib/avatar-storage';
 import { NumericInput } from '@/components/ui/numeric-input';
@@ -23,6 +25,7 @@ import {
   UnifiedBiometrics
 } from '@/lib/biometrics';
 import { AuthenticatedUser } from '@/lib/auth-client';
+import { calculateAge } from '@/lib/auth-crypto';
 
 interface ProfileViewProps {
   profileId: string;
@@ -80,8 +83,13 @@ export function ProfileView({
   // Campos temporários em edição
   const [editWeight, setEditWeight] = useState<number | null>(null);
   const [editHeightMeters, setEditHeightMeters] = useState<number | null>(null);
-  const [editAge, setEditAge] = useState<number | null>(null);
+  const [editBirthDate, setEditBirthDate] = useState<string>('');
   const [editTargetWeight, setEditTargetWeight] = useState<number | null>(null);
+  const [bioErrorMsg, setBioErrorMsg] = useState<string | null>(null);
+
+  const computedBioAge = editBirthDate
+    ? calculateAge(editBirthDate)
+    : (bio.birthDate ? calculateAge(bio.birthDate) : bio.age);
 
   // Escuta evento global de atualização biométrica
   useEffect(() => {
@@ -315,10 +323,12 @@ export function ProfileView({
             <button
               onClick={async () => {
                 if (editingBio) {
+                  setBioErrorMsg(null);
                   const parsedH = parseHeight(editHeightMeters);
-                  await saveUnifiedBiometrics(
+                  const res = await saveUnifiedBiometrics(
                     profileId,
                     {
+                      birthDate: editBirthDate,
                       currentWeightKg: editWeight,
                       weightKg: editWeight,
                       heightCm: parsedH.cm,
@@ -328,12 +338,17 @@ export function ProfileView({
                     currentUser,
                     onUserUpdated
                   );
+                  if (!res.success) {
+                    setBioErrorMsg(res.error || 'Erro ao persistir dados biométricos no servidor.');
+                    return;
+                  }
                   setEditingBio(false);
                 } else {
                   setEditWeight(bio.currentWeightKg || null);
                   setEditHeightMeters(bio.heightMeters || null);
-                  setEditAge(bio.age || null);
+                  setEditBirthDate(bio.birthDate || '');
                   setEditTargetWeight(bio.targetWeightKg || null);
+                  setBioErrorMsg(null);
                   setEditingBio(true);
                 }
               }}
@@ -343,6 +358,13 @@ export function ProfileView({
             </button>
           )}
         </div>
+
+        {bioErrorMsg && (
+          <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in">
+            <AlertCircle size={15} className="shrink-0 text-rose-400" />
+            <span>{bioErrorMsg}</span>
+          </div>
+        )}
 
         {editingBio && !isReadOnly ? (
           <div className="grid grid-cols-2 gap-3 text-xs animate-in fade-in">
@@ -372,16 +394,21 @@ export function ProfileView({
               />
             </label>
 
-            <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
-              <span>IDADE (anos):</span>
-              <NumericInput
-                value={editAge}
-                allowDecimals={false}
-                placeholder="Ex: 29"
-                onChangeValue={(val) => setEditAge(val)}
-                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-base outline-none"
+            <div className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
+              <span className="flex items-center gap-1">
+                <Calendar size={11} style={{ color: accentColor }} />
+                <span>NASCIMENTO:</span>
+              </span>
+              <input
+                type="date"
+                value={editBirthDate}
+                onChange={(e) => setEditBirthDate(e.target.value)}
+                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-base outline-none focus:border-white/40"
               />
-            </label>
+              <span className="text-[10px] text-neutral-400 font-mono">
+                Idade calculada: <strong className="text-white">{computedBioAge > 0 ? `${computedBioAge} anos` : '--'}</strong>
+              </span>
+            </div>
 
             <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
               <span>META DE PESO (kg):</span>

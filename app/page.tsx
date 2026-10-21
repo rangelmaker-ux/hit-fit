@@ -527,6 +527,8 @@ export default function Home() {
             initialSubTab={healthSubTab}
             currentWeightKg={currentWeightToday}
             isReadOnly={isReadOnly}
+            currentUser={currentUser}
+            onUserUpdated={(u) => setCurrentUser(u)}
             onWeightUpdated={(w) => {
               saveUnifiedBiometrics(
                 activeProfile,

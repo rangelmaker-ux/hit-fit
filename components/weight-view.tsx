@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Scale, Plus, Trash2, TrendingDown, TrendingUp, Calendar } from 'lucide-react';
 import { NumericInput } from '@/components/ui/numeric-input';
-import { getUnifiedBiometrics, saveUnifiedBiometrics } from '@/lib/biometrics';
+import { saveUnifiedBiometrics } from '@/lib/biometrics';
+import { AuthenticatedUser } from '@/lib/auth-client';
 
 export interface WeightRecord {
   id: string;
@@ -17,6 +18,8 @@ interface WeightViewProps {
   athleteName: string;
   accentColor: string;
   isReadOnly?: boolean;
+  currentUser?: AuthenticatedUser | null;
+  onUserUpdated?: (user: AuthenticatedUser) => void;
   onWeightUpdated?: (latestKg: number) => void;
 }
 
@@ -25,6 +28,8 @@ export function WeightView({
   athleteName,
   accentColor,
   isReadOnly = false,
+  currentUser,
+  onUserUpdated,
   onWeightUpdated
 }: WeightViewProps) {
   const getTodayStr = () => {
@@ -41,20 +46,9 @@ export function WeightView({
         const stored = localStorage.getItem(`hitfit-weight-history-${profileId}`);
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed)) return parsed;
         }
       } catch {}
-    }
-    // Seed com o peso cadastrado do atleta se não houver histórico
-    const bio = getUnifiedBiometrics(profileId);
-    if (bio.currentWeightKg > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      return [{
-        id: `w-init-${Date.now()}`,
-        date: today,
-        weightKg: bio.currentWeightKg,
-        notes: 'Peso inicial cadastrado'
-      }];
     }
     return [];
   });
@@ -83,7 +77,7 @@ export function WeightView({
     }
   }, [latestRecord, onWeightUpdated]);
 
-  const handleAddWeight = () => {
+  const handleAddWeight = async () => {
     if (isReadOnly || !inputWeight || inputWeight <= 0) return;
 
     const newRecord: WeightRecord = {
@@ -93,7 +87,12 @@ export function WeightView({
     };
 
     setHistory((prev) => [newRecord, ...prev]);
-    saveUnifiedBiometrics(profileId, { currentWeightKg: inputWeight, weightKg: inputWeight });
+    await saveUnifiedBiometrics(
+      profileId,
+      { currentWeightKg: inputWeight, weightKg: inputWeight },
+      currentUser,
+      onUserUpdated
+    );
     onWeightUpdated?.(inputWeight);
     setInputWeight(null);
     setIsAdding(false);
@@ -101,7 +100,18 @@ export function WeightView({
 
   const handleDeleteWeight = (id: string) => {
     if (isReadOnly) return;
-    setHistory((prev) => prev.filter((r) => r.id !== id));
+    const nextHistory = history.filter((r) => r.id !== id);
+    setHistory(nextHistory);
+    const newLatest = nextHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    if (newLatest) {
+      saveUnifiedBiometrics(
+        profileId,
+        { currentWeightKg: newLatest.weightKg, weightKg: newLatest.weightKg },
+        currentUser,
+        onUserUpdated
+      );
+      onWeightUpdated?.(newLatest.weightKg);
+    }
   };
 
   // Cálculo de variação total

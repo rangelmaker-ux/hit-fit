@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Target, Edit3 } from 'lucide-react';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { getUnifiedBiometrics, saveUnifiedBiometrics } from '@/lib/biometrics';
+import { AuthenticatedUser } from '@/lib/auth-client';
 
 interface WeightGoalData {
   initialWeightKg: number | null;
@@ -18,6 +19,8 @@ interface WeightGoalViewProps {
   accentColor: string;
   currentWeightKg: number;
   isReadOnly?: boolean;
+  currentUser?: AuthenticatedUser | null;
+  onUserUpdated?: (user: AuthenticatedUser) => void;
 }
 
 export function WeightGoalView({
@@ -25,7 +28,9 @@ export function WeightGoalView({
   athleteName,
   accentColor,
   currentWeightKg,
-  isReadOnly = false
+  isReadOnly = false,
+  currentUser,
+  onUserUpdated
 }: WeightGoalViewProps) {
   const isJack = athleteName.toLowerCase().includes('jack') || athleteName.toLowerCase().includes('geic') || profileId === 'person-geicsania';
 
@@ -61,10 +66,13 @@ export function WeightGoalView({
     } catch {}
   }, [goal, profileId]);
 
-  const handleSaveGoal = () => {
+  const handleSaveGoal = async () => {
     if (isReadOnly || !tempTarget || tempTarget <= 0) return;
 
-    const initial = tempInitial && tempInitial > 0 ? tempInitial : (currentWeightKg > 0 ? currentWeightKg : null);
+    const initial = tempInitial && tempInitial > 0
+      ? tempInitial
+      : (goal.initialWeightKg || (currentWeightKg > 0 ? currentWeightKg : null));
+
     const updatedGoal: WeightGoalData = {
       initialWeightKg: initial,
       targetWeightKg: tempTarget,
@@ -73,11 +81,16 @@ export function WeightGoalView({
     };
 
     setGoal(updatedGoal);
-    saveUnifiedBiometrics(profileId, {
-      initialWeightKg: initial,
-      targetWeightKg: tempTarget,
-      goal: tempObjective
-    });
+    await saveUnifiedBiometrics(
+      profileId,
+      {
+        initialWeightKg: tempInitial && tempInitial > 0 ? tempInitial : undefined,
+        targetWeightKg: tempTarget,
+        goal: tempObjective
+      },
+      currentUser,
+      onUserUpdated
+    );
     setIsEditing(false);
   };
 

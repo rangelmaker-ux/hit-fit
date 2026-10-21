@@ -7,6 +7,8 @@ import { WaterView } from '@/components/water-view';
 import { WeightView } from '@/components/weight-view';
 import { WeightGoalView } from '@/components/weight-goal-view';
 
+import { AuthenticatedUser } from '@/lib/auth-client';
+
 export type HealthSubTab = 'alimentacao' | 'agua' | 'peso' | 'meta';
 
 interface HealthHubViewProps {
@@ -17,6 +19,8 @@ interface HealthHubViewProps {
   initialSubTab?: HealthSubTab;
   currentWeightKg?: number;
   isReadOnly?: boolean;
+  currentUser?: AuthenticatedUser | null;
+  onUserUpdated?: (user: AuthenticatedUser) => void;
   onWeightUpdated?: (w: number) => void;
 }
 
@@ -28,6 +32,8 @@ export function HealthHubView({
   initialSubTab = 'alimentacao',
   currentWeightKg = 0,
   isReadOnly = false,
+  currentUser,
+  onUserUpdated,
   onWeightUpdated
 }: HealthHubViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<HealthSubTab>(initialSubTab);
@@ -106,6 +112,8 @@ export function HealthHubView({
           athleteName={athleteName}
           accentColor={accentColor}
           isReadOnly={isReadOnly}
+          currentUser={currentUser}
+          onUserUpdated={onUserUpdated}
           onWeightUpdated={(latest) => {
             setLiveWeightKg(latest);
             onWeightUpdated?.(latest);
@@ -120,6 +128,8 @@ export function HealthHubView({
           accentColor={accentColor}
           currentWeightKg={liveWeightKg}
           isReadOnly={isReadOnly}
+          currentUser={currentUser}
+          onUserUpdated={onUserUpdated}
         />
       )}
 

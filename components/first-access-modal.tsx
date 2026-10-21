@@ -81,7 +81,7 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
         await saveAvatar(user.id, avatarBase64);
       }
 
-      await saveUnifiedBiometrics(
+      const res = await saveUnifiedBiometrics(
         user.id,
         {
           birthDate,
@@ -95,17 +95,22 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
           activityLevel,
           avatarBase64
         },
-        user,
-        (updatedUser) => {
-          onCompleted(updatedUser);
-        }
+        user
       );
 
-      const completedUser: AuthenticatedUser = {
+      if (!res.success) {
+        setLoading(false);
+        setErrorMessage(res.error || 'Falha ao salvar dados no servidor. Verifique a conexão.');
+        return;
+      }
+
+      const completedUser: AuthenticatedUser = res.user || {
         ...user,
         birthDate,
         age: computedAge || user.age || 0,
         initialWeightKg: weightKg,
+        currentWeightKg: weightKg,
+        targetWeightKg,
         heightCm: parsedH.cm,
         goal,
         activityLevel,

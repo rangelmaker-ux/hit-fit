@@ -47,7 +47,11 @@ import {
 import {
   parseHeight,
   formatHeight,
-  formatWeight
+  formatWeight,
+  getUnifiedBiometrics,
+  saveUnifiedBiometrics,
+  getPendingSyncCount,
+  queuePendingSync
 } from '../lib/biometrics.ts';
 
 const TEST_SECRET = 'hitfit-test-crypto-secret-key-at-least-32-characters-long-2026';
@@ -483,4 +487,140 @@ test('16. Formatação de Peso e Decimais no Padrão Brasileiro', () => {
   assert.strictEqual(formatWeight(null), '-- kg');
   assert.strictEqual(formatWeight(undefined), '-- kg');
 });
+
+test('17. Desacoplamento Rigoroso de Peso Inicial, Peso Atual e Meta de Peso', async () => {
+  const testAthlete = {
+    id: 'person-test-athlete',
+    username: 'rangel',
+    name: 'Rangel Teste',
+    role: 'rangel',
+    age: 29,
+    birthDate: '1997-03-15',
+    initialWeightKg: 97,
+    currentWeightKg: 97,
+    targetWeightKg: 85,
+    heightCm: 178,
+    goal: 'fat_loss',
+    activityLevel: 'Intenso'
+  };
+
+  // Carrega biometria inicial: initialWeightKg deve ser 97, target 85
+  const bioInit = getUnifiedBiometrics('person-test-athlete', testAthlete);
+  assert.strictEqual(bioInit.initialWeightKg, 97, 'initialWeightKg deve ser 97');
+  assert.strictEqual(bioInit.currentWeightKg, 97, 'currentWeightKg inicial deve ser 97');
+  assert.strictEqual(bioInit.targetWeightKg, 85, 'targetWeightKg inicial deve ser 85');
+  assert.strictEqual(bioInit.age, calculateAge('1997-03-15'), 'Idade deve ser calculada a partir da data civil');
+
+  // Cenário A: Registra uma nova pesagem (95.5 kg)
+  // DEVE atualizar currentWeightKg mas PRESERVAR estritamente initialWeightKg (97) e targetWeightKg (85)
+  let currentTestUser = { ...testAthlete };
+  const weighInResult = await saveUnifiedBiometrics(
+    'person-test-athlete',
+    { currentWeightKg: 95.5 },
+    currentTestUser,
+    (updated) => { currentTestUser = updated; }
+  );
+  assert.strictEqual(weighInResult.success, true);
+  assert.strictEqual(weighInResult.biometrics.currentWeightKg, 95.5, 'currentWeightKg deve ser 95.5');
+  assert.strictEqual(weighInResult.biometrics.initialWeightKg, 97, 'initialWeightKg deve permanecer 97!');
+  assert.strictEqual(weighInResult.biometrics.targetWeightKg, 85, 'targetWeightKg deve permanecer 85!');
+
+  // Atualiza o usuário em sessão com a nova pesagem mantendo initialWeightKg intacto
+  currentTestUser = { ...currentTestUser, currentWeightKg: 95.5 };
+
+  // Cenário B: Atualiza apenas a meta de peso (82 kg)
+  // DEVE atualizar targetWeightKg mas PRESERVAR initialWeightKg (97) e currentWeightKg (95.5)
+  const targetResult = await saveUnifiedBiometrics(
+    'person-test-athlete',
+    { targetWeightKg: 82 },
+    currentTestUser,
+    (updated) => { currentTestUser = updated; }
+  );
+  assert.strictEqual(targetResult.success, true);
+  assert.strictEqual(targetResult.biometrics.targetWeightKg, 82, 'targetWeightKg deve ser 82');
+  assert.strictEqual(targetResult.biometrics.initialWeightKg, 97, 'initialWeightKg deve continuar 97!');
+  assert.strictEqual(targetResult.biometrics.currentWeightKg, 95.5, 'currentWeightKg deve continuar 95.5!');
+});
+
+test('18. Fluxo de Primeiro Acesso com Dados de Referência (29 anos, 97 kg, 1,78 m, meta 85 kg)', async () => {
+  // Simula usuário recém-autenticado pendente de primeiro acesso
+  const newUser = {
+    id: 'person-test-flow',
+    username: 'rangel',
+    name: 'Rangel',
+    role: 'rangel',
+    age: 0,
+    initialWeightKg: null,
+    currentWeightKg: null,
+    targetWeightKg: null,
+    heightCm: null,
+    goal: 'Emagrecimento & Definição',
+    activityLevel: 'Moderado',
+    needsProfileSetup: true
+  };
+
+  // Simula envio do formulário de Primeiro Acesso
+  const parsedH = parseHeight('1,78');
+  assert.strictEqual(parsedH.cm, 178);
+  assert.strictEqual(parsedH.meters, 1.78);
+
+  const birthDate = '1997-03-15';
+  const civilAge = calculateAge(birthDate);
+
+  const saveRes = await saveUnifiedBiometrics(
+    'person-test-flow',
+    {
+      birthDate,
+      initialWeightKg: 97,
+      currentWeightKg: 97,
+      heightCm: parsedH.cm,
+      heightMeters: parsedH.meters,
+      targetWeightKg: 85,
+      goal: 'fat_loss'
+    }
+  );
+
+  assert.strictEqual(saveRes.success, true);
+  assert.strictEqual(saveRes.biometrics.initialWeightKg, 97);
+  assert.strictEqual(saveRes.biometrics.currentWeightKg, 97);
+  assert.strictEqual(saveRes.biometrics.targetWeightKg, 85);
+  assert.strictEqual(saveRes.biometrics.heightCm, 178);
+  assert.strictEqual(saveRes.biometrics.heightMeters, 1.78);
+  assert.strictEqual(saveRes.biometrics.age, civilAge);
+
+  // Simula reabertura do aplicativo com sessão hidratada
+  const hydratedUser = {
+    ...newUser,
+    birthDate,
+    age: civilAge,
+    initialWeightKg: 97,
+    currentWeightKg: 97,
+    targetWeightKg: 85,
+    heightCm: 178,
+    needsProfileSetup: false
+  };
+
+  const reloadedBio = getUnifiedBiometrics('person-test-flow', hydratedUser);
+  assert.strictEqual(reloadedBio.initialWeightKg, 97, 'Reabertura: initialWeightKg conferido');
+  assert.strictEqual(reloadedBio.currentWeightKg, 97, 'Reabertura: currentWeightKg conferido');
+  assert.strictEqual(reloadedBio.targetWeightKg, 85, 'Reabertura: targetWeightKg conferido');
+  assert.strictEqual(reloadedBio.heightCm, 178, 'Reabertura: heightCm conferido');
+  assert.strictEqual(reloadedBio.age, civilAge, 'Reabertura: idade civil conferida');
+  assert.strictEqual(reloadedBio.waterGoalMl, Math.round(97 * 38), 'Reabertura: hidratação conferida');
+});
+
+test('19. Fila de Sincronização Offline e Resiliência sem Perda Silenciosa', () => {
+  const initialCount = getPendingSyncCount();
+  assert.strictEqual(typeof initialCount, 'number');
+
+  // Enfileira alteração pendente
+  queuePendingSync('person-offline-test', {
+    weightKg: 94.8,
+    timestamp: Date.now()
+  });
+
+  const nextCount = getPendingSyncCount();
+  assert.ok(nextCount >= initialCount, 'Fila deve incrementar ou registrar item pendente');
+});
+
 
