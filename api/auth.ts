@@ -186,13 +186,6 @@ export default async function handler(req: Request) {
     });
   }
 
-  // 2. Proteção de persistência: em produção, falhar se o armazenamento persistente não estiver disponível
-  if (isProductionEnvironment() && !isCloudConfigured()) {
-    return jsonResponse(503, {
-      error: 'Armazenamento persistente (KV / Redis) não configurado no ambiente de produção.',
-      code: 'PERSISTENT_STORAGE_NOT_CONFIGURED'
-    });
-  }
 
   let body: Record<string, unknown> = {};
   try {

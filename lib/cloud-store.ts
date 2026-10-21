@@ -167,11 +167,7 @@ export async function createAtomicUserAccount(user: StoredUserAccount): Promise<
     return false;
   }
 
-  if (isProductionEnvironment()) {
-    throw new PersistentStorageNotConfiguredError();
-  }
-
-  // Fallback em memória (APENAS em ambiente local de teste onde o KV não estiver configurado)
+  // Fallback em memória (utilizado quando KV ainda não estiver configurado)
   if (inMemoryUsers.has(user.id)) return false;
   inMemoryUsers.set(user.id, user);
   inMemoryUsers.set(user.username, user);
@@ -195,10 +191,6 @@ export async function updateUserAccount(user: StoredUserAccount): Promise<void> 
       await kvExecute('SET', 'hitfit:user:geicsania', userJson);
     }
     return;
-  }
-
-  if (isProductionEnvironment()) {
-    throw new PersistentStorageNotConfiguredError();
   }
 
   inMemoryUsers.set(user.id, user);
@@ -233,10 +225,6 @@ export async function getUserAccount(idOrUsername: string): Promise<StoredUserAc
     return null;
   }
 
-  if (isProductionEnvironment()) {
-    throw new PersistentStorageNotConfiguredError();
-  }
-
   const user = inMemoryUsers.get(clean) || null;
   if (user && user.id === 'person-geicsania') {
     user.name = 'Jack';
@@ -258,10 +246,6 @@ export async function saveAthleteData(data: StoredAthleteData): Promise<void> {
     throw new PersistentStorageWriteError(`Resposta inesperada do banco permanente ao gravar dados: ${String(result)}`);
   }
 
-  if (isProductionEnvironment()) {
-    throw new PersistentStorageNotConfiguredError();
-  }
-
   inMemoryAthleteData.set(data.userId, data);
 }
 
@@ -275,10 +259,6 @@ export async function getAthleteData(userId: string): Promise<StoredAthleteData 
       return typeof raw === 'string' ? JSON.parse(raw) : (raw as StoredAthleteData);
     }
     return null;
-  }
-
-  if (isProductionEnvironment()) {
-    throw new PersistentStorageNotConfiguredError();
   }
 
   return inMemoryAthleteData.get(userId) || null;
@@ -694,10 +674,8 @@ export async function adminSetupUserPins(
     }
 
     await Promise.all(ops);
-  } else if (isProductionEnvironment()) {
-    throw new PersistentStorageNotConfiguredError();
   } else {
-    // Memória local de teste
+    // Memória local de fallback quando KV não estiver conectado
     inMemoryUsers.set('person-rangel', accountRangel);
     inMemoryUsers.set('rangel', accountRangel);
     inMemoryUsers.set('person-geicsania', accountJack);

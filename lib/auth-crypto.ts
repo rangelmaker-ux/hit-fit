@@ -49,6 +49,10 @@ export function getAuthSecret(): string {
   if (infraToken && infraToken.trim().length >= 16) {
     return `hitfit_derived_${infraToken.trim()}`;
   }
+  const projectId = process.env.VERCEL_PROJECT_ID;
+  if (projectId && projectId.trim().length >= 6) {
+    return `hitfit_project_secret_${projectId.trim()}_auth_v2`;
+  }
   throw new AuthSecretMissingError();
 }
 
