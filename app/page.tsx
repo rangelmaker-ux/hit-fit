@@ -318,7 +318,7 @@ export default function Home() {
   // TELA DE LOGIN PREMIUM (SEM FORMULÁRIO DE BIOMETRIA PRÉVIO)
   if (!currentUser) {
     return (
-      <main className="min-h-screen bg-[#07090C] text-neutral-100 flex items-center justify-center p-4 selection:bg-[#C4F53C]/30">
+      <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#07090C] text-neutral-100 flex items-center justify-center p-4 selection:bg-[#C4F53C]/30">
         <AuthLoginView
           onAuthenticated={(user) => {
             setCurrentUser(user);
@@ -333,7 +333,7 @@ export default function Home() {
   // PRIMEIRO ACESSO APÓS O LOGIN (CONFIGURAÇÃO DE BIOMETRIA INDIVIDUAL SE INCOMPLETO)
   if (currentUser.needsProfileSetup) {
     return (
-      <main className="min-h-screen bg-[#07090C] text-neutral-100 flex items-center justify-center p-4 selection:bg-[#C4F53C]/30">
+      <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#07090C] text-neutral-100 flex items-center justify-center p-4 selection:bg-[#C4F53C]/30">
         <FirstAccessModal
           user={currentUser}
           onCompleted={(updatedUser) => {
@@ -356,8 +356,8 @@ export default function Home() {
   const progressPct = Math.round((completedSetsToday / Math.max(1, totalSetsToday)) * 100);
 
   return (
-    <div className="min-h-screen bg-[#07090C] text-neutral-100 flex flex-col items-center overflow-x-hidden selection:bg-[#C4F53C]/30">
-      <div className="w-full max-w-lg min-h-screen flex flex-col px-4 pt-3 pb-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))]">
+    <div className="min-h-screen w-full max-w-full bg-[#07090C] text-neutral-100 flex flex-col items-center overflow-x-hidden selection:bg-[#C4F53C]/30">
+      <div className="w-full max-w-lg min-h-screen flex flex-col px-4 pt-3 pb-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))] overflow-x-hidden">
         
         {/* HEADER: STATUS DE AUTENTICAÇÃO E ATLETA */}
         <header className="flex items-center justify-between py-3 border-b border-white/[0.06] mb-3">

@@ -15,8 +15,16 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom;
   background-color: var(--bg-obsidian);
   color: #F1F4F9;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -25,6 +33,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+}
+
+#root,
+main,
+#__next {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+  position: relative;
+}
+
+/* Esconder estritamente qualquer barra de rolagem horizontal */
+::-webkit-scrollbar:horizontal {
+  display: none !important;
+  height: 0px !important;
 }
 
 /* Scrollbar invisível ou ultrafina para sensação nativa */

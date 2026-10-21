@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Dumbbell, Shield, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight, KeyRound, X } from 'lucide-react';
+import { Dumbbell, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { getAvatar } from '@/lib/avatar-storage';
 import {
   loginAthlete,
-  setupInitialPins,
-  checkSetupStatus,
   AuthenticatedUser
 } from '@/lib/auth-client';
 
@@ -22,18 +20,6 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
   const [authSuccess, setAuthSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [avatars, setAvatars] = useState<Record<string, string | null>>({});
-
-  // Estado de configuração inicial protegida (proprietário)
-  const [isSetupNeeded, setIsSetupNeeded] = useState(false);
-  const [cloudConnected, setCloudConnected] = useState(true);
-  const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminKey, setAdminKey] = useState('');
-  const [showAdminKey, setShowAdminKey] = useState(false);
-  const [setupPin, setSetupPin] = useState('');
-  const [setupConfirmPin, setSetupConfirmPin] = useState('');
-  const [setupSuccessMsg, setSetupSuccessMsg] = useState<string | null>(null);
-  const [adminError, setAdminError] = useState<string | null>(null);
-  const [checkingSetup, setCheckingSetup] = useState(true);
 
   const isJack = selectedRole === 'jack';
   const accentColor = isJack ? '#FF267A' : '#C4F53C';
@@ -52,18 +38,6 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
         });
       }
     });
-
-    checkSetupStatus()
-      .then((status) => {
-        if (active) {
-          setCloudConnected(status.cloudConnected);
-          setIsSetupNeeded(status.isSetupNeeded);
-          setCheckingSetup(false);
-        }
-      })
-      .catch(() => {
-        if (active) setCheckingSetup(false);
-      });
 
     return () => {
       active = false;
@@ -92,51 +66,17 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
     setAuthSuccess(true);
     setTimeout(() => {
       onAuthenticated(res.user!);
-    }, 700);
-  };
-
-  const handleSetupPins = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError(null);
-
-    if (!adminKey.trim()) {
-      setAdminError('Informe a Chave Administrativa do Proprietário.');
-      return;
-    }
-
-    if (!/^\d{6}$/.test(setupPin)) {
-      setAdminError('O PIN deve conter exatamente 6 dígitos numéricos.');
-      return;
-    }
-
-    if (setupPin !== setupConfirmPin) {
-      setAdminError('A confirmação do PIN não confere.');
-      return;
-    }
-
-    setLoading(true);
-    const res = await setupInitialPins(setupPin, setupConfirmPin, adminKey);
-    setLoading(false);
-
-    if (!res.success) {
-      setAdminError(res.error || 'Falha ao ativar contas. Verifique a chave administrativa.');
-      return;
-    }
-
-    setSetupSuccessMsg('Contas de Rangel e Jack ativadas com sucesso!');
-    setIsSetupNeeded(false);
-    setShowAdminModal(false);
-    setPin(setupPin);
+    }, 600);
   };
 
   return (
-    <div className="w-full max-w-md mx-auto flex flex-col items-center justify-center min-h-[90vh] py-6 px-4 animate-in fade-in duration-500">
+    <div className="w-full max-w-md mx-auto flex flex-col items-center justify-center min-h-[90vh] py-6 px-4 overflow-x-hidden">
       
       {/* LOGO HIT-FIT COM ANIMAÇÃO PREMIUM E BRILHO */}
-      <div className="relative flex flex-col items-center mb-6">
+      <div className="relative flex flex-col items-center mb-6 overflow-hidden p-2">
         <div className="relative">
-          {/* Anéis de Pulsação Neon Duplos (Cyber Lime + Magenta) */}
-          <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-[#C4F53C]/30 via-transparent to-[#FF267A]/30 blur-xl opacity-75 animate-pulse" />
+          {/* Anel de Pulsação Contido (Sem Bleed Horizontal) */}
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-[#C4F53C]/20 via-transparent to-[#FF267A]/20 blur-md opacity-75" />
           
           <div className="relative w-20 h-20 rounded-3xl bg-[#0E121A] border border-white/10 flex items-center justify-center shadow-2xl">
             <Dumbbell className="w-10 h-10 text-white animate-bounce duration-1000" style={{ filter: `drop-shadow(0 0 12px ${accentColor})` }} />
@@ -158,50 +98,8 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
         </div>
       </div>
 
-      {/* AVISO SE PERSISTÊNCIA NA NUVEM PENDENTE */}
-      {!cloudConnected && !checkingSetup && (
-        <div className="w-full mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <div className="leading-relaxed">
-            <strong className="block text-amber-200 font-bold mb-0.5">Atenção de Infraestrutura:</strong>
-            As variáveis de banco permanente (Vercel KV / Upstash Redis) e segurança pendem de ativação no painel da Vercel (<code className="font-mono bg-black/40 px-1 py-0.5 rounded">HITFIT_AUTH_SECRET</code>, <code className="font-mono bg-black/40 px-1 py-0.5 rounded">KV_REST_API_URL</code>, <code className="font-mono bg-black/40 px-1 py-0.5 rounded">KV_REST_API_TOKEN</code>).
-          </div>
-        </div>
-      )}
-
       {/* TELA DE LOGIN PREMIUM (RANGEL OU JACK) */}
-      <div className="w-full bg-[#0E121A] rounded-3xl border border-white/10 p-6 shadow-2xl relative">
-        
-        {/* BANNER SE AS CONTAS PENDEM DE ATIVAÇÃO PELO PROPRIETÁRIO */}
-        {isSetupNeeded && !checkingSetup && (
-          <div className="mb-5 p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-200 text-xs flex flex-col gap-2">
-            <div className="flex items-center gap-2 font-bold">
-              <KeyRound size={15} className="text-sky-400 shrink-0" />
-              <span>Ativação Inicial do Proprietário</span>
-            </div>
-            <p className="text-[11px] text-neutral-300 leading-relaxed">
-              As contas de Rangel e Jack aguardam a ativação inicial com a chave administrativa do servidor.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setShowAdminModal(true);
-                setAdminError(null);
-              }}
-              className="mt-1 py-2 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-200 text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-colors tap-haptic"
-            >
-              <Shield size={13} />
-              <span>Inserir Chave Administrativa e Ativar</span>
-            </button>
-          </div>
-        )}
-
-        {setupSuccessMsg && (
-          <div className="mb-4 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-            <CheckCircle2 size={16} className="shrink-0" />
-            <span>{setupSuccessMsg}</span>
-          </div>
-        )}
+      <div className="w-full max-w-full bg-[#0E121A] rounded-3xl border border-white/10 p-6 shadow-2xl relative overflow-x-hidden">
 
         {/* SELETOR DE PERFIL: RANGEL VS JACK */}
         <div className="flex flex-col gap-2 mb-5">
@@ -280,25 +178,11 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
           </div>
         </div>
 
-        {/* MENSAGEM DE ERRO */}
+        {/* MENSAGEM DE ERRO (APENAS SE O PIN FOR DIGITADO INCORRETAMENTE) */}
         {errorMessage && (
-          <div className="mb-4 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex flex-col gap-2 animate-in shake">
-            <div className="flex items-center gap-2.5">
-              <AlertCircle size={16} className="shrink-0 text-rose-400" />
-              <span className="font-medium">{errorMessage}</span>
-            </div>
-            {errorMessage.includes('ainda não inicializadas') && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAdminModal(true);
-                  setAdminError(null);
-                }}
-                className="mt-1 text-[11px] underline text-sky-300 hover:text-sky-200 text-left font-mono"
-              >
-                Ativar agora com a chave administrativa →
-              </button>
-            )}
+          <div className="mb-4 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5 animate-in shake">
+            <AlertCircle size={16} className="shrink-0 text-rose-400" />
+            <span className="font-medium">{errorMessage}</span>
           </div>
         )}
 
@@ -385,102 +269,6 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
         </form>
 
       </div>
-
-      {/* MODAL ADMINISTRATIVO DE ATIVAÇÃO PROTEGIDA (HITFIT_ADMIN_KEY) */}
-      {showAdminModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-[#0E121A] rounded-3xl border border-white/15 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
-            <button
-              type="button"
-              onClick={() => setShowAdminModal(false)}
-              className="absolute top-5 right-5 text-neutral-400 hover:text-white p-1 rounded-lg"
-            >
-              <X size={18} />
-            </button>
-
-            <div className="flex items-center gap-2 mb-3">
-              <Shield className="w-5 h-5 text-[#C4F53C]" />
-              <h2 className="text-lg font-black text-white">Ativação do Proprietário</h2>
-            </div>
-
-            <p className="text-xs text-neutral-300 leading-relaxed mb-4">
-              Provisionamento seguro das contas de <strong>Rangel</strong> e <strong>Jack</strong>. Requer a chave administrativa configurada no servidor.
-            </p>
-
-            {adminError && (
-              <div className="mb-4 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle size={15} className="shrink-0" />
-                <span>{adminError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSetupPins} className="flex flex-col gap-3.5">
-              <label className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between text-xs font-mono font-bold text-neutral-300">
-                  <span>Chave Administrativa (HITFIT_ADMIN_KEY):</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminKey(!showAdminKey)}
-                    className="text-neutral-400 hover:text-white text-[11px]"
-                  >
-                    {showAdminKey ? 'Ocultar' : 'Mostrar'}
-                  </button>
-                </div>
-                <input
-                  type={showAdminKey ? 'text' : 'password'}
-                  value={adminKey}
-                  onChange={(e) => setAdminKey(e.target.value)}
-                  placeholder="Segredo administrativo do servidor"
-                  className="w-full p-3 bg-[#07090C] border border-white/15 rounded-xl font-mono text-sm text-white outline-none focus:border-[#C4F53C]"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-mono font-bold text-neutral-300">PIN Inicial de 6 dígitos:</span>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={setupPin}
-                  onChange={(e) => setSetupPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="Ex: 123456"
-                  className="w-full p-3 bg-[#07090C] border border-white/15 rounded-xl text-center text-lg font-mono tracking-widest font-black text-white outline-none focus:border-[#C4F53C]"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-mono font-bold text-neutral-300">Confirmar PIN:</span>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={setupConfirmPin}
-                  onChange={(e) => setSetupConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="Repita o PIN de 6 dígitos"
-                  className="w-full p-3 bg-[#07090C] border border-white/15 rounded-xl text-center text-lg font-mono tracking-widest font-black text-white outline-none focus:border-[#C4F53C]"
-                />
-              </label>
-
-              <div className="flex gap-2.5 mt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAdminModal(false)}
-                  className="flex-1 py-3 rounded-xl border border-white/10 text-neutral-300 text-xs font-bold hover:bg-white/5 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading || !adminKey || setupPin.length !== 6 || setupConfirmPin.length !== 6}
-                  className="flex-1 py-3 rounded-xl bg-[#C4F53C] hover:bg-[#b0df32] text-black font-black text-xs disabled:opacity-40 shadow-lg transition-colors tap-haptic"
-                >
-                  {loading ? 'Validando...' : 'Ativar Contas'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* RODAPÉ ELEGANTE */}
       <footer className="mt-6 text-center text-[11px] text-neutral-400 font-mono">
