@@ -94,32 +94,40 @@ const {
   LegPress45Svg,
   LegPressHorizontalSvg,
   LegExtensionSvg,
+  LegExtensionCableSvg,
   LegCurlSvg,
   LegCurlSeatedSvg,
   StiffDumbbellSvg,
   CalfRaiseSvg,
   CalfRaiseLegPressSvg,
+  CalfRaiseSeatedSvg,
   // Costas
   PulldownWideSvg,
   PulldownCloseSvg,
+  GravitonPullupSvg,
   CableRowSvg,
   TBarRowSvg,
+  ChestSupportedRowMachineSvg,
   SingleArmRowSvg,
   SingleArmRowCableSvg,
   // Braços
   BicepsCurlWBarSvg,
   BicepsCurlCableSvg,
+  BicepsCurlAlternatingDumbbellSvg,
   HammerCurlDumbbellSvg,
+  HammerCurlRopeCableSvg,
   TricepsRopePushdownSvg,
   TricepsBarPushdownSvg,
   // Glúteos & Core
   HipThrustMachineSvg,
   HipThrustBarbellSvg,
+  HipThrustSmithSvg,
   BulgarianSplitSquatSvg,
   SumoSquatStepSvg,
   SeatedAbductorSvg,
   CableStandingAbductionSvg,
   PlankCoreSvg,
+  SwissBallCrunchSvg,
   // Peito
   BenchPressBarbellSvg,
   BenchPressDumbbellSvg,
@@ -212,12 +220,17 @@ test('3. Troca de Equipamentos: handleSwapExercise atualiza animationKey para ca
     );
     assert.ok(altItem, `Alternativa '${targetIdentifier}' deve existir em currentExercise`);
 
-    const previousPrimary = currentExercise.machines.primary;
+    const previousPrimary = {
+      ...currentExercise.machines.primary,
+      reps: currentExercise.reps,
+      restSeconds: currentExercise.restSeconds,
+      biomechanics: currentExercise.biomechanics
+    };
     const newAlternatives = [
       ...currentExercise.machines.alternatives.filter(
         (a) => a !== altItem && a.variantId !== targetIdentifier && a.name !== targetIdentifier
       ),
-      { ...previousPrimary }
+      previousPrimary
     ];
 
     const newVariantId = altItem.variantId || altItem.animationKey;
@@ -230,6 +243,8 @@ test('3. Troca de Equipamentos: handleSwapExercise atualiza animationKey para ca
       name: newName,
       activeVariantId: newVariantId,
       animationKey: newAnimationKey,
+      reps: altItem.reps || currentExercise.reps,
+      restSeconds: altItem.restSeconds || currentExercise.restSeconds,
       machines: {
         primary: {
           ...altItem,
@@ -242,11 +257,15 @@ test('3. Troca de Equipamentos: handleSwapExercise atualiza animationKey para ca
         },
         alternatives: newAlternatives
       },
-      biomechanics: registryItem ? {
-        ...currentExercise.biomechanics,
-        setup: registryItem.settingTips || currentExercise.biomechanics.setup,
-        execution: registryItem.description || currentExercise.biomechanics.execution
-      } : currentExercise.biomechanics
+      biomechanics: altItem.biomechanics
+        ? altItem.biomechanics
+        : registryItem
+        ? {
+            ...currentExercise.biomechanics,
+            setup: registryItem.settingTips || currentExercise.biomechanics.setup,
+            execution: registryItem.description || currentExercise.biomechanics.execution
+          }
+        : currentExercise.biomechanics
     };
   }
 
@@ -266,7 +285,6 @@ test('3. Troca de Equipamentos: handleSwapExercise atualiza animationKey para ca
   assert.equal(swappedToMachine.animationKey, 'shoulderPressMachine', 'animationKey DEVE mudar para shoulderPressMachine');
   assert.notEqual(swappedToMachine.animationKey, 'shoulderPressDumbbell', 'NÃO pode manter a chave de halteres');
   assert.equal(swappedToMachine.machines.primary.name, 'Desenvolvimento em Máquina Articulada');
-  // O banco com halteres agora é uma alternativa disponível
   assert.ok(swappedToMachine.machines.alternatives.some((a) => a.variantId === 'sh-1-dumbbells'));
 
   // Transição 2: Troca da Máquina Articulada para Smith Machine
@@ -302,6 +320,86 @@ test('3. Troca de Equipamentos: handleSwapExercise atualiza animationKey para ca
   const restoredToCables = simulateSwap(swappedToLatMachine, 'sh-2-cables');
   assert.equal(restoredToCables.activeVariantId, 'sh-2-cables');
   assert.equal(restoredToCables.animationKey, 'lateralRaiseCable', 'Retorno para polia deve restaurar lateralRaiseCable');
+
+  // C. TESTE DE ROUND-TRIP NA PUXADA ALTA (back-1): Barra Aberta -> Graviton
+  const tuesday = WORKOUT_DAYS.find((d) => d.dayShort === 'TER');
+  const initialBack1 = tuesday.exercises.find((ex) => ex.id === 'back-1');
+  assert.equal(initialBack1.animationKey, 'pulldownWide');
+  const swappedToGraviton = simulateSwap(initialBack1, 'back-1-graviton');
+  assert.equal(swappedToGraviton.animationKey, 'gravitonPullup', 'Graviton DEVE ter animationKey gravitonPullup e NÃO pulldownClose');
+  const restoredBack1 = simulateSwap(swappedToGraviton, 'back-1-wide');
+  assert.equal(restoredBack1.animationKey, 'pulldownWide');
+
+  // D. TESTE DE ROUND-TRIP NA REMADA (back-2): Polia Baixa -> Remada Máquina Articulada
+  const initialBack2 = tuesday.exercises.find((ex) => ex.id === 'back-2');
+  assert.equal(initialBack2.animationKey, 'cableRowSeated');
+  const swappedToMachineRow = simulateSwap(initialBack2, 'back-2-machine');
+  assert.equal(swappedToMachineRow.animationKey, 'chestSupportedRowMachine', 'Máquina articulada DEVE ter chave chestSupportedRowMachine');
+  const restoredBack2 = simulateSwap(swappedToMachineRow, 'back-2-seated-cable');
+  assert.equal(restoredBack2.animationKey, 'cableRowSeated');
+
+  // E. TESTE DE ROUND-TRIP NO BÍCEPS (back-4): Barra W -> Rosca com Halteres Alternada
+  const initialBack4 = tuesday.exercises.find((ex) => ex.id === 'back-4');
+  assert.equal(initialBack4.animationKey, 'bicepsWBar');
+  const swappedToAltDumbbell = simulateSwap(initialBack4, 'back-4-dumbbells');
+  assert.equal(swappedToAltDumbbell.animationKey, 'bicepsAlternatingDumbbell', 'Rosca alternada DEVE ter chave bicepsAlternatingDumbbell');
+  const restoredBack4 = simulateSwap(swappedToAltDumbbell, 'back-4-wbar');
+  assert.equal(restoredBack4.animationKey, 'bicepsWBar');
+
+  // F. TESTE DE ROUND-TRIP NA ROSCA MARTELO (back-5): Halteres -> Rosca Martelo na Corda
+  const initialBack5 = tuesday.exercises.find((ex) => ex.id === 'back-5');
+  assert.equal(initialBack5.animationKey, 'hammerDumbbell');
+  const swappedToRopeHammer = simulateSwap(initialBack5, 'back-5-rope');
+  assert.equal(swappedToRopeHammer.animationKey, 'hammerRopeCable', 'Rosca martelo na corda DEVE ter chave hammerRopeCable');
+  const restoredBack5 = simulateSwap(swappedToRopeHammer, 'back-5-dumbbells');
+  assert.equal(restoredBack5.animationKey, 'hammerDumbbell');
+
+  // G. TESTE DE ROUND-TRIP NO CORE (back-6): Prancha no Solo (Isometria) -> Bola Suíça (Dinâmico)
+  const initialBack6 = tuesday.exercises.find((ex) => ex.id === 'back-6');
+  assert.equal(initialBack6.animationKey, 'plankFloor');
+  assert.equal(initialBack6.reps, '45s Prancha + 15 Infra');
+  const swappedToSwissBall = simulateSwap(initialBack6, 'back-6-ball');
+  assert.equal(swappedToSwissBall.animationKey, 'swissBallCrunch', 'Abdominal na Bola Suíça DEVE ter chave swissBallCrunch');
+  assert.equal(swappedToSwissBall.reps, '15 - 20', 'Abdominal na Bola Suíça DEVE ter prescrição dinâmica 15 - 20 reps');
+  const restoredBack6 = simulateSwap(swappedToSwissBall, 'back-6-floor');
+  assert.equal(restoredBack6.animationKey, 'plankFloor');
+  assert.equal(restoredBack6.reps, '45s Prancha + 15 Infra', 'Round-trip de volta à prancha deve restaurar a prescrição isométrica original');
+
+  // H. TESTE DE ROUND-TRIP NA ELEVAÇÃO PÉLVICA (glute-1): Máquina Dedicada -> Smith Machine
+  const thursday = WORKOUT_DAYS.find((d) => d.dayShort === 'QUI');
+  const initialGlute1 = thursday.exercises.find((ex) => ex.id === 'glute-1');
+  assert.equal(initialGlute1.animationKey, 'hipThrustMachine');
+  const swappedToSmithHip = simulateSwap(initialGlute1, 'glute-1-smith');
+  assert.equal(swappedToSmithHip.animationKey, 'hipThrustSmith', 'Elevação Pélvica no Smith DEVE ter chave hipThrustSmith');
+  const restoredGlute1 = simulateSwap(swappedToSmithHip, 'glute-1-machine');
+  assert.equal(restoredGlute1.animationKey, 'hipThrustMachine');
+
+  // I. TESTE DE ROUND-TRIP NO AGACHAMENTO (glute-2): Búlgaro -> Sumô no Step
+  const initialGlute2 = thursday.exercises.find((ex) => ex.id === 'glute-2');
+  assert.equal(initialGlute2.animationKey, 'bulgarianSplitSquat');
+  assert.equal(initialGlute2.reps, '10 cada perna');
+  const swappedToSumo = simulateSwap(initialGlute2, 'glute-2-sumo');
+  assert.equal(swappedToSumo.animationKey, 'sumoSquatStep');
+  assert.equal(swappedToSumo.reps, '12 - 15', 'Sumô no step deve prescrever 12 - 15 reps');
+  const restoredGlute2 = simulateSwap(swappedToSumo, 'glute-2-bulgarian');
+  assert.equal(restoredGlute2.animationKey, 'bulgarianSplitSquat');
+  assert.equal(restoredGlute2.reps, '10 cada perna');
+
+  // J. TESTE DE ROUND-TRIP NO POSTERIOR (leg-4): Mesa Flexora -> Stiff com Halteres
+  const monday = WORKOUT_DAYS.find((d) => d.dayShort === 'SEG');
+  const initialLeg4 = monday.exercises.find((ex) => ex.id === 'leg-4');
+  assert.equal(initialLeg4.animationKey, 'legcurlProne');
+  assert.equal(initialLeg4.reps, '12');
+  assert.equal(initialLeg4.restSeconds, 50);
+  const swappedToStiff = simulateSwap(initialLeg4, 'leg-4-stiff');
+  assert.equal(swappedToStiff.animationKey, 'stiffDumbbell');
+  assert.equal(swappedToStiff.reps, '10 - 12');
+  assert.equal(swappedToStiff.restSeconds, 60);
+  assert.match(swappedToStiff.biomechanics.execution.toLowerCase(), /quadril para trás|canelas/);
+  const restoredLeg4 = simulateSwap(swappedToStiff, 'leg-4-prone');
+  assert.equal(restoredLeg4.animationKey, 'legcurlProne');
+  assert.equal(restoredLeg4.reps, '12');
+  assert.equal(restoredLeg4.restSeconds, 50);
 });
 
 // ============================================================================
@@ -363,7 +461,15 @@ test('4. Auditoria do Catálogo: Todos os 21 exercícios do plano e todas as var
     ['peckDeckFly', 'benchPressBarbell'],
     ['rearDeltPeckDeck', 'shoulderPressDumbbell'],
     ['tricepsRopePushdown', 'shoulderPressDumbbell'],
-    ['bulgarianSplitSquat', 'squatSmith']
+    ['bulgarianSplitSquat', 'squatSmith'],
+    ['gravitonPullup', 'pulldownClose'],
+    ['chestSupportedRowMachine', 'cableRowSeated'],
+    ['bicepsAlternatingDumbbell', 'bicepsWBar'],
+    ['hammerRopeCable', 'bicepsCable'],
+    ['swissBallCrunch', 'plankFloor'],
+    ['hipThrustSmith', 'hipThrustMachine'],
+    ['legextCable', 'legextBilateral'],
+    ['calfSeated', 'calfStanding']
   ];
 
   for (const [keyA, keyB] of forbiddenPairs) {
@@ -393,32 +499,40 @@ test('5. Integridade Vetorial: Todos os modelos SVG exportados renderizam marca�
     { name: 'LegPress45Svg', fn: LegPress45Svg, requiresProps: true },
     { name: 'LegPressHorizontalSvg', fn: LegPressHorizontalSvg, requiresProps: true },
     { name: 'LegExtensionSvg', fn: LegExtensionSvg, requiresProps: true },
+    { name: 'LegExtensionCableSvg', fn: LegExtensionCableSvg, requiresProps: true },
     { name: 'LegCurlSvg', fn: LegCurlSvg, requiresProps: true },
     { name: 'LegCurlSeatedSvg', fn: LegCurlSeatedSvg, requiresProps: true },
     { name: 'StiffDumbbellSvg', fn: StiffDumbbellSvg, requiresProps: true },
     { name: 'CalfRaiseSvg', fn: CalfRaiseSvg, requiresProps: true },
     { name: 'CalfRaiseLegPressSvg', fn: CalfRaiseLegPressSvg, requiresProps: true },
+    { name: 'CalfRaiseSeatedSvg', fn: CalfRaiseSeatedSvg, requiresProps: true },
     // Costas
     { name: 'PulldownWideSvg', fn: PulldownWideSvg, requiresProps: true },
     { name: 'PulldownCloseSvg', fn: PulldownCloseSvg, requiresProps: true },
+    { name: 'GravitonPullupSvg', fn: GravitonPullupSvg, requiresProps: true },
     { name: 'CableRowSvg', fn: CableRowSvg, requiresProps: true },
     { name: 'TBarRowSvg', fn: TBarRowSvg, requiresProps: true },
+    { name: 'ChestSupportedRowMachineSvg', fn: ChestSupportedRowMachineSvg, requiresProps: true },
     { name: 'SingleArmRowSvg', fn: SingleArmRowSvg, requiresProps: true },
     { name: 'SingleArmRowCableSvg', fn: SingleArmRowCableSvg, requiresProps: true },
     // Braços
     { name: 'BicepsCurlWBarSvg', fn: BicepsCurlWBarSvg, requiresProps: true },
     { name: 'BicepsCurlCableSvg', fn: BicepsCurlCableSvg, requiresProps: true },
+    { name: 'BicepsCurlAlternatingDumbbellSvg', fn: BicepsCurlAlternatingDumbbellSvg, requiresProps: true },
     { name: 'HammerCurlDumbbellSvg', fn: HammerCurlDumbbellSvg, requiresProps: true },
+    { name: 'HammerCurlRopeCableSvg', fn: HammerCurlRopeCableSvg, requiresProps: true },
     { name: 'TricepsRopePushdownSvg', fn: TricepsRopePushdownSvg, requiresProps: true },
     { name: 'TricepsBarPushdownSvg', fn: TricepsBarPushdownSvg, requiresProps: true },
     // Glúteos & Core
     { name: 'HipThrustMachineSvg', fn: HipThrustMachineSvg, requiresProps: true },
     { name: 'HipThrustBarbellSvg', fn: HipThrustBarbellSvg, requiresProps: true },
+    { name: 'HipThrustSmithSvg', fn: HipThrustSmithSvg, requiresProps: true },
     { name: 'BulgarianSplitSquatSvg', fn: BulgarianSplitSquatSvg, requiresProps: true },
     { name: 'SumoSquatStepSvg', fn: SumoSquatStepSvg, requiresProps: true },
     { name: 'SeatedAbductorSvg', fn: SeatedAbductorSvg, requiresProps: true },
     { name: 'CableStandingAbductionSvg', fn: CableStandingAbductionSvg, requiresProps: true },
     { name: 'PlankCoreSvg', fn: PlankCoreSvg, requiresProps: false },
+    { name: 'SwissBallCrunchSvg', fn: SwissBallCrunchSvg, requiresProps: true },
     // Peito
     { name: 'BenchPressBarbellSvg', fn: BenchPressBarbellSvg, requiresProps: true },
     { name: 'BenchPressDumbbellSvg', fn: BenchPressDumbbellSvg, requiresProps: true },
@@ -441,7 +555,7 @@ test('5. Integridade Vetorial: Todos os modelos SVG exportados renderizam marca�
     { name: 'AnimationInPreparationSvg', fn: AnimationInPreparationSvg, requiresProps: false }
   ];
 
-  assert.ok(models.length >= 40, `Devem existir mais de 40 modelos SVG dedicados (encontrados: ${models.length})`);
+  assert.ok(models.length >= 48, `Devem existir mais de 48 modelos SVG dedicados (encontrados: ${models.length})`);
 
   for (const m of models) {
     assert.equal(typeof m.fn, 'function', `${m.name} deve ser uma função de componente React válida`);
@@ -487,4 +601,63 @@ test('6. Anatomia: Todos os 21 exercícios possuem partes corporais anatômicas 
       }
     }
   }
+});
+
+// ============================================================================
+// TESTE 7: Eliminação Total de Modelos Incompatíveis Remanescentes (8 Aparelhos)
+// ============================================================================
+test('7. Eliminação Total de Modelos Incompatíveis: 8 novos aparelhos possuem componentes SVG 100% dedicados', () => {
+  // 1. back-1-graviton: Barra Fixa Assistida no Graviton
+  const graviton = getVariantRegistryItem('back-1-graviton');
+  assert.equal(graviton.animationKey, 'gravitonPullup');
+  assert.notEqual(graviton.animationKey, 'pulldownClose');
+  const gravitonSvg = GravitonPullupSvg({ phase: 'concentric', accentColor: '#c3f75a' });
+  assert.equal(gravitonSvg.type, 'svg');
+
+  // 2. back-2-machine: Remada Máquina Articulada com Apoio Peitoral
+  const machineRow = getVariantRegistryItem('back-2-machine');
+  assert.equal(machineRow.animationKey, 'chestSupportedRowMachine');
+  assert.notEqual(machineRow.animationKey, 'cableRowSeated');
+  const machineRowSvg = ChestSupportedRowMachineSvg({ phase: 'concentric', accentColor: '#c3f75a' });
+  assert.equal(machineRowSvg.type, 'svg');
+
+  // 3. back-4-dumbbells: Rosca Alternada com Supinação
+  const altBiceps = getVariantRegistryItem('back-4-dumbbells');
+  assert.equal(altBiceps.animationKey, 'bicepsAlternatingDumbbell');
+  assert.notEqual(altBiceps.animationKey, 'bicepsWBar');
+  const altBicepsSvg = BicepsCurlAlternatingDumbbellSvg({ phase: 'concentric', accentColor: '#c3f75a' });
+  assert.equal(altBicepsSvg.type, 'svg');
+
+  // 4. back-5-rope: Rosca Martelo na Corda na Polia Baixa
+  const ropeHammer = getVariantRegistryItem('back-5-rope');
+  assert.equal(ropeHammer.animationKey, 'hammerRopeCable');
+  assert.notEqual(ropeHammer.animationKey, 'bicepsCable');
+  const ropeHammerSvg = HammerCurlRopeCableSvg({ phase: 'concentric', accentColor: '#c3f75a' });
+  assert.equal(ropeHammerSvg.type, 'svg');
+
+  // 5. back-6-ball: Abdominal na Bola Suíça (Fitball Dinâmico)
+  const ballCrunch = getVariantRegistryItem('back-6-ball');
+  assert.equal(ballCrunch.animationKey, 'swissBallCrunch');
+  assert.notEqual(ballCrunch.animationKey, 'plankFloor');
+  const ballCrunchSvg = SwissBallCrunchSvg({ phase: 'concentric', accentColor: '#c3f75a' });
+  assert.equal(ballCrunchSvg.type, 'svg');
+
+  // 6. glute-1-smith: Hip Thrust no Smith Machine (Barra Guiada)
+  const smithHip = getVariantRegistryItem('glute-1-smith');
+  assert.equal(smithHip.animationKey, 'hipThrustSmith');
+  assert.notEqual(smithHip.animationKey, 'hipThrustMachine');
+  const smithHipSvg = HipThrustSmithSvg({ phase: 'concentric', accentColor: '#c3f75a' });
+  assert.equal(smithHipSvg.type, 'svg');
+
+  // 7. leg-3-cable-unilateral: Extensora Unilateral no Cabo
+  const cableExt = getVariantRegistryItem('leg-3-cable-unilateral');
+  assert.equal(cableExt.animationKey, 'legextCable');
+  const cableExtSvg = LegExtensionCableSvg({ phase: 'concentric', accentColor: '#c3f75a' });
+  assert.equal(cableExtSvg.type, 'svg');
+
+  // 8. leg-5-seated: Gêmeos Sentado (Cavalinho a 90°)
+  const seatedCalf = getVariantRegistryItem('leg-5-seated');
+  assert.equal(seatedCalf.animationKey, 'calfSeated');
+  const seatedCalfSvg = CalfRaiseSeatedSvg({ phase: 'concentric', accentColor: '#c3f75a' });
+  assert.equal(seatedCalfSvg.type, 'svg');
 });

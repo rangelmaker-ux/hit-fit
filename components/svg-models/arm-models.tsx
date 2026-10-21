@@ -179,6 +179,128 @@ export function TricepsBarPushdownSvg({ phase, accentColor }: SvgModelProps) {
   );
 }
 
+// 6. ROSCA COM HALTERES ALTERNADA COM SUPINAÇÃO (back-4-dumbbells / bicepsAlternatingDumbbell)
+export function BicepsCurlAlternatingDumbbellSvg({ phase, accentColor }: SvgModelProps) {
+  const isCurled = phase === 'concentric';
+  return (
+    <svg viewBox="0 0 160 160" className="w-44 h-44" aria-label="Rosca com Halteres Alternada com Supinação">
+      <line x1="25" y1="148" x2="135" y2="148" stroke="#30363D" strokeWidth="4" strokeLinecap="round" />
+
+      {/* Atleta em pé com coluna alinhada */}
+      <circle cx="80" cy="38" r="8" fill="#161B22" stroke="#FFFFFF" strokeWidth="2" />
+      <line x1="80" y1="46" x2="80" y2="95" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+      <line x1="80" y1="95" x2="73" y2="148" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
+      <line x1="80" y1="95" x2="87" y2="148" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
+
+      {/* Braço Esquerdo (em repouso ao lado com halter neutro) */}
+      <line x1="74" y1="56" x2="68" y2="82" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
+      <line x1="68" y1="82" x2="66" y2="108" stroke="#8B949E" strokeWidth="4" strokeLinecap="round" />
+      {/* Halter esquerdo neutro */}
+      <line x1="61" y1="108" x2="71" y2="108" stroke="#E6EDF3" strokeWidth="3" />
+      <rect x="58" y="104" width="3" height="8" rx="1" fill="#8B949E" />
+      <rect x="71" y="104" width="3" height="8" rx="1" fill="#8B949E" />
+
+      {/* Braço Direito Ativo (flexionando com rotação/supinação de punho) */}
+      <line x1="86" y1="56" x2="90" y2="80" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
+      {/* Antebraço subindo com supinação - palma voltada ao ombro */}
+      <line
+        x1="90"
+        y1="80"
+        x2={isCurled ? '106' : '94'}
+        y2={isCurled ? '54' : '108'}
+        stroke={accentColor}
+        strokeWidth="5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out drop-shadow-[0_0_8px_currentColor]"
+      />
+      {/* Halter supinado no topo */}
+      <g className="transition-transform duration-1000 ease-in-out" style={{ transform: isCurled ? 'translate(8px, -52px)' : 'translate(0, 0)' }}>
+        <line x1="89" y1="108" x2="103" y2="108" stroke="#E6EDF3" strokeWidth="3.5" />
+        <rect x="86" y="103" width="3.5" height="10" rx="1" fill={accentColor} />
+        <rect x="103" y="103" width="3.5" height="10" rx="1" fill={accentColor} />
+      </g>
+    </svg>
+  );
+}
+
+// 7. ROSCA MARTELO NA CORDA NA POLIA BAIXA (back-5-rope / hammerRopeCable)
+export function HammerCurlRopeCableSvg({ phase, accentColor }: SvgModelProps) {
+  const isCurled = phase === 'concentric';
+  return (
+    <svg viewBox="0 0 160 160" className="w-44 h-44" aria-label="Rosca Martelo na Corda (Polia Baixa)">
+      {/* Polia baixa central no solo */}
+      <circle cx="80" cy="142" r="5" fill="#30363D" stroke="#8B949E" strokeWidth="1.5" />
+      <line x1="20" y1="148" x2="140" y2="148" stroke="#30363D" strokeWidth="4" />
+
+      {/* Atleta em pé */}
+      <circle cx="80" cy="40" r="8" fill="#161B22" stroke="#FFFFFF" strokeWidth="2" />
+      <line x1="80" y1="48" x2="80" y2="98" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+      <line x1="80" y1="98" x2="72" y2="148" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
+      <line x1="80" y1="98" x2="88" y2="148" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
+
+      {/* Cotovelos travados na lateral do tronco */}
+      <circle cx="74" cy="74" r="3" fill="#8B949E" />
+      <circle cx="86" cy="74" r="3" fill="#8B949E" />
+
+      {/* Cabo tracionando da polia baixa até a corda */}
+      <line
+        x1="80"
+        y1="142"
+        x2="80"
+        y2={isCurled ? '76' : '110'}
+        stroke="#8B949E"
+        strokeWidth="2"
+        strokeDasharray="3 2"
+        className="transition-all duration-1000 ease-in-out"
+      />
+
+      {/* Puxador Corda dupla com pegada neutra e separação das pontas no pico */}
+      <path
+        d={isCurled ? 'M80 76 L66 66' : 'M80 110 L72 104'}
+        stroke="#E6EDF3"
+        strokeWidth="3.5"
+        fill="none"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out"
+      />
+      <path
+        d={isCurled ? 'M80 76 L94 66' : 'M80 110 L88 104'}
+        stroke="#E6EDF3"
+        strokeWidth="3.5"
+        fill="none"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out"
+      />
+
+      {/* Pontas da corda (nódulos) */}
+      <circle cx={isCurled ? '66' : '72'} cy={isCurled ? '66' : '104'} r="4" fill="#8B949E" className="transition-all duration-1000" />
+      <circle cx={isCurled ? '94' : '88'} cy={isCurled ? '66' : '104'} r="4" fill="#8B949E" className="transition-all duration-1000" />
+
+      {/* Antebraços puxando na pegada neutra com braquiorradial ativo */}
+      <line
+        x1="74"
+        y1="74"
+        x2={isCurled ? '66' : '72'}
+        y2={isCurled ? '66' : '104'}
+        stroke={accentColor}
+        strokeWidth="5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out drop-shadow-[0_0_8px_currentColor]"
+      />
+      <line
+        x1="86"
+        y1="74"
+        x2={isCurled ? '94' : '88'}
+        y2={isCurled ? '66' : '104'}
+        stroke={accentColor}
+        strokeWidth="5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out drop-shadow-[0_0_8px_currentColor]"
+      />
+    </svg>
+  );
+}
+
 // Aliases
 export const BicepsCurlSvg = BicepsCurlWBarSvg;
 export const HammerCurlSvg = HammerCurlDumbbellSvg;

@@ -169,6 +169,151 @@ export function SingleArmRowCableSvg({ phase, accentColor }: SvgModelProps) {
   );
 }
 
+// 7. BARRA FIXA ASSISTIDA NO GRAVITON (back-1-graviton / gravitonPullup)
+export function GravitonPullupSvg({ phase, accentColor }: SvgModelProps) {
+  const isUp = phase === 'concentric';
+  return (
+    <svg viewBox="0 0 160 160" className="w-44 h-44" aria-label="Barra Fixa Assistida no Graviton">
+      {/* Colunas e trilhos laterais da máquina */}
+      <line x1="30" y1="15" x2="30" y2="148" stroke="#21262D" strokeWidth="4" />
+      <line x1="130" y1="15" x2="130" y2="148" stroke="#21262D" strokeWidth="4" />
+      <line x1="20" y1="148" x2="140" y2="148" stroke="#30363D" strokeWidth="4" />
+
+      {/* Barra de pegada superior com manoplas ergonômicas */}
+      <line x1="30" y1="20" x2="130" y2="20" stroke="#8B949E" strokeWidth="4" strokeLinecap="round" />
+      <line x1="45" y1="20" x2="55" y2="28" stroke="#E6EDF3" strokeWidth="3.5" strokeLinecap="round" />
+      <line x1="115" y1="20" x2="105" y2="28" stroke="#E6EDF3" strokeWidth="3.5" strokeLinecap="round" />
+
+      {/* Plataforma de apoio dos joelhos conectada ao contrapeso móvel */}
+      <g className="transition-transform duration-1000 ease-in-out" style={{ transform: isUp ? 'translateY(-24px)' : 'translateY(4px)' }}>
+        <rect x="52" y="116" width="56" height="8" rx="2" fill="#21262D" stroke="#8B949E" strokeWidth="1.5" />
+        <rect x="58" y="112" width="44" height="4" rx="1" fill="#484F58" />
+      </g>
+
+      {/* Atleta subindo em tração assistida */}
+      <g className="transition-transform duration-1000 ease-in-out" style={{ transform: isUp ? 'translateY(-24px)' : 'translateY(4px)' }}>
+        {/* Cabeça passando ou aproximando da barra */}
+        <circle cx="80" cy={isUp ? '24' : '44'} r="8" fill="#161B22" stroke="#FFFFFF" strokeWidth="2" />
+        {/* Tronco ereto com contração de dorsal */}
+        <line x1="80" y1={isUp ? '32' : '52'} x2="80" y2={isUp ? '76' : '96'} stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round" />
+        {/* Coxas flexionadas apoiadas sobre a plataforma */}
+        <line x1="80" y1={isUp ? '76' : '96'} x2="80" y2="114" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+
+        {/* Braços e cotovelos flexionados na puxada */}
+        <line
+          x1={isUp ? '80' : '80'}
+          y1={isUp ? '38' : '56'}
+          x2={isUp ? '58' : '52'}
+          y2={isUp ? '56' : '36'}
+          stroke={accentColor}
+          strokeWidth="5"
+          strokeLinecap="round"
+          className="drop-shadow-[0_0_8px_currentColor]"
+        />
+        <line
+          x1={isUp ? '58' : '52'}
+          y1={isUp ? '56' : '36'}
+          x2="55"
+          y2="28"
+          stroke="#E6EDF3"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+
+        <line
+          x1={isUp ? '80' : '80'}
+          y1={isUp ? '38' : '56'}
+          x2={isUp ? '102' : '108'}
+          y2={isUp ? '56' : '36'}
+          stroke={accentColor}
+          strokeWidth="5"
+          strokeLinecap="round"
+          className="drop-shadow-[0_0_8px_currentColor]"
+        />
+        <line
+          x1={isUp ? '102' : '108'}
+          y1={isUp ? '56' : '36'}
+          x2="105"
+          y2="28"
+          stroke="#E6EDF3"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+      </g>
+    </svg>
+  );
+}
+
+// 8. REMADA MÁQUINA ARTICULADA COM APOIO PEITORAL (back-2-machine / chestSupportedRowMachine)
+export function ChestSupportedRowMachineSvg({ phase, accentColor }: SvgModelProps) {
+  const isPulled = phase === 'concentric';
+  return (
+    <svg viewBox="0 0 160 160" className="w-44 h-44" aria-label="Remada Máquina Articulada com Apoio Peitoral">
+      <line x1="15" y1="148" x2="145" y2="148" stroke="#30363D" strokeWidth="4" />
+
+      {/* Banco e base da máquina */}
+      <rect x="36" y="98" width="30" height="8" rx="2" fill="#21262D" stroke="#30363D" strokeWidth="1.5" />
+      <line x1="48" y1="106" x2="48" y2="148" stroke="#21262D" strokeWidth="4" />
+
+      {/* Almofada Peitoral Vertical Frontal */}
+      <rect x="76" y="58" width="8" height="42" rx="3" fill="#8B949E" stroke="#E6EDF3" strokeWidth="1.5" />
+      <line x1="80" y1="100" x2="80" y2="148" stroke="#21262D" strokeWidth="5" />
+
+      {/* Eixo de articulação das alavancas */}
+      <circle cx="106" cy="46" r="5" fill="#30363D" stroke="#8B949E" strokeWidth="2" />
+
+      {/* Alavanca mecânica articulada */}
+      <line
+        x1="106"
+        y1="46"
+        x2={isPulled ? '82' : '108'}
+        y2={isPulled ? '76' : '78'}
+        stroke="#8B949E"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out"
+      />
+      {/* Pegador da alavanca */}
+      <circle
+        cx={isPulled ? '82' : '108'}
+        cy={isPulled ? '76' : '78'}
+        r="4"
+        fill="#E6EDF3"
+        className="transition-all duration-1000 ease-in-out"
+      />
+
+      {/* Atleta sentado com peito apoiado */}
+      <circle cx="60" cy="46" r="8" fill="#161B22" stroke="#FFFFFF" strokeWidth="2" />
+      {/* Tronco encostado firme na almofada peitoral */}
+      <line x1="60" y1="54" x2="72" y2="98" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+      {/* Pernas do atleta no apoio de pé */}
+      <line x1="72" y1="98" x2="55" y2="140" stroke="#484F58" strokeWidth="4" strokeLinecap="round" />
+
+      {/* Braço puxando a alavanca para trás - cotovelo passando da linha do tronco */}
+      <line
+        x1="66"
+        y1="64"
+        x2={isPulled ? '44' : '88'}
+        y2={isPulled ? '74' : '72'}
+        stroke={accentColor}
+        strokeWidth="5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out drop-shadow-[0_0_8px_currentColor]"
+      />
+      <line
+        x1={isPulled ? '44' : '88'}
+        y1={isPulled ? '74' : '72'}
+        x2={isPulled ? '82' : '108'}
+        y2={isPulled ? '76' : '78'}
+        stroke={accentColor}
+        strokeWidth="4"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out"
+      />
+    </svg>
+  );
+}
+
 // Aliases
 export const PulldownSvg = PulldownWideSvg;
 export const CableRowSeatedSvg = CableRowSvg;

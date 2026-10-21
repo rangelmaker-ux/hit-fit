@@ -212,6 +212,120 @@ export function PlankCoreSvg({ accentColor }: { accentColor: string }) {
   );
 }
 
+// 8. ABDOMINAL NA BOLA SUÍÇA (back-6-ball / swissBallCrunch)
+export function SwissBallCrunchSvg({ phase, accentColor }: SvgModelProps) {
+  const isCrunched = phase === 'concentric';
+  return (
+    <svg viewBox="0 0 160 160" className="w-44 h-44" aria-label="Abdominal na Bola Suíça (Fitball)">
+      <line x1="15" y1="145" x2="145" y2="145" stroke="#30363D" strokeWidth="4" />
+
+      {/* Bola Suíça apoiando a região lombar */}
+      <circle cx="62" cy="115" r="24" fill="#161B22" stroke="#8B949E" strokeWidth="2.5" />
+      <path d="M48 105 Q62 96 76 105" stroke="#30363D" strokeWidth="2" fill="none" />
+      <path d="M50 125 Q62 134 74 125" stroke="#30363D" strokeWidth="2" fill="none" />
+
+      {/* Pés firmes e joelhos a 90° */}
+      <line x1="122" y1="145" x2="122" y2="112" stroke="#484F58" strokeWidth="4.5" strokeLinecap="round" />
+      <line x1="122" y1="112" x2="88" y2="104" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+
+      {/* Quadril apoiado na curvatura da bola */}
+      <circle cx="88" cy="104" r="4" fill="#8B949E" />
+
+      {/* Tronco: Enrolando para cima no pico concêntrico ou estendendo para trás na excêntrica */}
+      <line
+        x1="88"
+        y1="104"
+        x2={isCrunched ? '58' : '44'}
+        y2={isCrunched ? '80' : '108'}
+        stroke={accentColor}
+        strokeWidth="6.5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out drop-shadow-[0_0_8px_currentColor]"
+      />
+
+      {/* Cabeça e braços cruzados no peito ou mãos na têmpora */}
+      <circle
+        cx={isCrunched ? '50' : '34'}
+        cy={isCrunched ? '68' : '114'}
+        r="7.5"
+        fill="#161B22"
+        stroke="#FFFFFF"
+        strokeWidth="2"
+        className="transition-all duration-1000 ease-in-out"
+      />
+      <line
+        x1={isCrunched ? '55' : '40'}
+        y1={isCrunched ? '76' : '110'}
+        x2={isCrunched ? '64' : '48'}
+        y2={isCrunched ? '68' : '98'}
+        stroke="#8B949E"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out"
+      />
+    </svg>
+  );
+}
+
+// 9. ELEVAÇÃO PÉLVICA NO SMITH MACHINE (glute-1-smith / hipThrustSmith)
+export function HipThrustSmithSvg({ phase, accentColor }: SvgModelProps) {
+  const isUp = phase === 'concentric';
+  return (
+    <svg viewBox="0 0 160 160" className="w-44 h-44" aria-label="Elevação Pélvica no Smith Machine">
+      <line x1="15" y1="145" x2="145" y2="145" stroke="#30363D" strokeWidth="4" />
+
+      {/* Trilho Vertical da Smith Machine */}
+      <line x1="88" y1="20" x2="88" y2="145" stroke="#8B949E" strokeWidth="3" />
+      {/* Trava amarela de segurança do Smith */}
+      <rect x="83" y="120" width="10" height="5" rx="1" fill="#F59E0B" />
+
+      {/* Banco Reto para apoio escapular */}
+      <rect x="25" y="90" width="34" height="8" rx="2" fill="#21262D" stroke="#30363D" strokeWidth="1.5" />
+      <line x1="36" y1="98" x2="36" y2="145" stroke="#21262D" strokeWidth="4" />
+
+      {/* Atleta apoiando escápulas na borda do banco */}
+      <circle cx="48" cy="84" r="8" fill="#161B22" stroke="#FFFFFF" strokeWidth="2" />
+      <line x1="48" y1="88" x2="58" y2="92" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+
+      {/* Tronco e Quadril subindo até ficar alinhado horizontalmente sob os trilhos */}
+      <line
+        x1="58"
+        y1="92"
+        x2="88"
+        y2={isUp ? '90' : '122'}
+        stroke={accentColor}
+        strokeWidth="6"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out drop-shadow-[0_0_8px_currentColor]"
+      />
+
+      {/* Coxas conectando quadril ao joelho a 90° */}
+      <line
+        x1="88"
+        y1={isUp ? '90' : '122'}
+        x2="116"
+        y2="92"
+        stroke={accentColor}
+        strokeWidth="5.5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out drop-shadow-[0_0_8px_currentColor]"
+      />
+
+      {/* Canela vertical com pés firmes no chão */}
+      <line x1="116" y1="92" x2="116" y2="145" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+
+      {/* Barra guiada do Smith com almofada grossa deslizando no trilho vertical */}
+      <g className="transition-transform duration-1000 ease-in-out" style={{ transform: isUp ? 'translateY(-32px)' : 'translateY(0)' }}>
+        {/* Barra e anilhas */}
+        <line x1="74" y1="120" x2="102" y2="120" stroke="#E6EDF3" strokeWidth="3" />
+        <rect x="78" y="116" width="20" height="8" rx="2" fill="#30363D" stroke="#E6EDF3" strokeWidth="1" />
+        {/* Gancho de encaixe no trilho */}
+        <path d="M88 116 L88 112 L92 112" stroke="#F59E0B" strokeWidth="2" fill="none" />
+      </g>
+    </svg>
+  );
+}
+
 // Aliases
 export const HipThrustSvg = HipThrustMachineSvg;
 export const SeatedAbductorMachineSvg = SeatedAbductorSvg;

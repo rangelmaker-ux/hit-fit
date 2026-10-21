@@ -6,6 +6,15 @@ export interface ExerciseEquipmentVariant {
   equipmentType?: string;
   animationKey?: string;
   animationStatus?: 'verified' | 'in_preparation';
+  reps?: string;
+  restSeconds?: number;
+  biomechanics?: {
+    setup: string;
+    execution: string;
+    breathing: string;
+    commonMistake: string;
+    proTip: string;
+  };
 }
 
 export interface Exercise {
@@ -249,7 +258,16 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               equipmentType: 'standing_dumbbells_stiff',
               animationKey: 'stiffDumbbell',
               animationStatus: 'verified',
-              description: 'Exercício livre com halteres focando no alongamento posterior.'
+              reps: '10 - 12',
+              restSeconds: 60,
+              description: 'Exercício livre com halteres focando no alongamento posterior.',
+              biomechanics: {
+                setup: 'Pés na largura dos quadris, joelhos levemente destravados, halteres repousando à frente das coxas.',
+                execution: 'Inicie empurrando o quadril para trás com a coluna 100% neutra, descendo os halteres rentes às canelas até sentir o posterior alongar no limite. Suba contraindo os glúteos.',
+                breathing: 'Inspire controlando a descida com tronco inclinado; expire subindo até ficar em pé.',
+                commonMistake: 'Arredondar a coluna lombar ou agachar dobrando os joelhos em excesso.',
+                proTip: 'Mantenha as escápulas conectadas e os halteres quase raspando nas pernas para proteger a lombar.'
+              }
             }
           ]
         },
@@ -370,7 +388,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               name: 'Barra Fixa com Graviton (ou Elástico)',
               variantId: 'back-1-graviton',
               equipmentType: 'graviton_pullup',
-              animationKey: 'pulldownClose',
+              animationKey: 'gravitonPullup',
               animationStatus: 'verified',
               description: 'Para quem quer força funcional com suporte de contrapeso.'
             }
@@ -422,7 +440,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               name: 'Remada Máquina Articulada',
               variantId: 'back-2-machine',
               equipmentType: 'chest_supported_row',
-              animationKey: 'cableRowSeated',
+              animationKey: 'chestSupportedRowMachine',
               animationStatus: 'verified',
               description: 'Aparelho com apoio peitoral que elimina a carga na lombar.'
             }
@@ -518,7 +536,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               name: 'Rosca com Halteres Alternada',
               variantId: 'back-4-dumbbells',
               equipmentType: 'alternating_dumbbells',
-              animationKey: 'bicepsWBar',
+              animationKey: 'bicepsAlternatingDumbbell',
               animationStatus: 'verified',
               description: 'Permite rotação do punho (supinação) para pico do bíceps.'
             }
@@ -562,7 +580,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               name: 'Rosca Martelo na Corda (Polia Baixa)',
               variantId: 'back-5-rope',
               equipmentType: 'rope_hammer_curl',
-              animationKey: 'bicepsCable',
+              animationKey: 'hammerRopeCable',
               animationStatus: 'verified',
               description: 'Puxador corda na polia baixa com pegada firme.'
             }
@@ -606,9 +624,18 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               name: 'Abdominal na Bola Suíça',
               variantId: 'back-6-ball',
               equipmentType: 'swiss_ball_core',
-              animationKey: 'plankFloor',
+              animationKey: 'swissBallCrunch',
               animationStatus: 'verified',
-              description: 'Maior recrutamento de estabilidade do core.'
+              reps: '15 - 20',
+              restSeconds: 45,
+              description: 'Maior recrutamento de estabilidade e amplitude dinâmica do core.',
+              biomechanics: {
+                setup: 'Apoie a região lombar sobre a curvatura da bola suíça com os pés cravados no chão na largura dos quadris e mãos na nuca sem puxar o pescoço.',
+                execution: 'Alongue o abdômen para trás acompanhando a curva da bola e contraia o reto abdominal enrolando o tronco para cima até o pico de contração.',
+                breathing: 'Expire ao subir e enrolar o abdômen; inspire ao descer alongando sobre a curvatura da bola.',
+                commonMistake: 'Puxar o pescoço com os braços ou quicar o quadril sobre a bola.',
+                proTip: 'A bola suíça permite hiperextensão segura da coluna, aumentando o arco e a ativação das fibras do reto abdominal.'
+              }
             }
           ]
         },
@@ -896,7 +923,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               name: 'Elevação Pélvica no Smith Machine',
               variantId: 'glute-1-smith',
               equipmentType: 'smith_hip_thrust',
-              animationKey: 'hipThrustMachine',
+              animationKey: 'hipThrustSmith',
               animationStatus: 'verified',
               description: 'Mais facilidade para travar e destravar o peso sozinho.'
             }
@@ -942,7 +969,16 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               equipmentType: 'sumo_step_squat',
               animationKey: 'sumoSquatStep',
               animationStatus: 'verified',
-              description: 'Pés bem afastados sobre dois steps, descendo o halter até o meio.'
+              reps: '12 - 15',
+              restSeconds: 60,
+              description: 'Pés bem afastados sobre dois steps, descendo o halter até o meio.',
+              biomechanics: {
+                setup: 'Pés bem afastados sobre dois steps paralelos, pontas abertas a 45°, segurando halter vertical pesado no centro.',
+                execution: 'Agache profundamente descendo o quadril e permitindo que o halter desça abaixo do nível dos steps. Empurre o chão pelos calcanhares subindo forte.',
+                breathing: 'Inspire na descida profunda; expire na subida contraindo glúteos e adutores.',
+                commonMistake: 'Deixar os joelhos colapsarem para dentro ou curvar a lombar.',
+                proTip: 'O uso dos steps proporciona amplitude muito maior que no solo, ativando fibras profundas do glúteo máximo.'
+              }
             }
           ]
         },

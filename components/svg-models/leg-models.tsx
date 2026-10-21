@@ -282,6 +282,115 @@ export function CalfRaiseLegPressSvg({ phase, accentColor }: SvgModelProps) {
   );
 }
 
+// 12. EXTENSÃO UNILATERAL NO CABO COM TORNOZELEIRA (leg-3-cable-unilateral / legextCable)
+export function LegExtensionCableSvg({ phase, accentColor }: SvgModelProps) {
+  const isExtended = phase === 'concentric';
+  return (
+    <svg viewBox="0 0 160 160" className="w-44 h-44" aria-label="Extensora Unilateral no Cabo">
+      {/* Torre da polia baixa */}
+      <rect x="20" y="30" width="8" height="120" rx="2" fill="#161B22" stroke="#21262D" strokeWidth="2" />
+      <circle cx="24" cy="140" r="5" fill="#30363D" stroke="#8B949E" strokeWidth="1.5" />
+      <line x1="15" y1="148" x2="145" y2="148" stroke="#30363D" strokeWidth="3" />
+
+      {/* Atleta em pé segurando o suporte da torre */}
+      <circle cx="75" cy="42" r="8" fill="#161B22" stroke="#FFFFFF" strokeWidth="2" />
+      <line x1="75" y1="50" x2="72" y2="98" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+      {/* Braço segurando a torre */}
+      <line x1="74" y1="62" x2="28" y2="70" stroke="#8B949E" strokeWidth="3" strokeLinecap="round" />
+
+      {/* Perna de apoio fixa no chão */}
+      <line x1="72" y1="98" x2="72" y2="148" stroke="#484F58" strokeWidth="4" strokeLinecap="round" />
+
+      {/* Perna de trabalho estendendo para frente */}
+      <line x1="72" y1="98" x2={isExtended ? '92' : '78'} y2={isExtended ? '106' : '112'} stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+      {/* Quadríceps ativo estendendo canela contra o cabo */}
+      <line
+        x1={isExtended ? '92' : '78'}
+        y1={isExtended ? '106' : '112'}
+        x2={isExtended ? '128' : '82'}
+        y2={isExtended ? '106' : '142'}
+        stroke={accentColor}
+        strokeWidth="5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out drop-shadow-[0_0_8px_currentColor]"
+      />
+      {/* Tornozeleira */}
+      <circle
+        cx={isExtended ? '128' : '82'}
+        cy={isExtended ? '106' : '142'}
+        r="4"
+        fill="#E6EDF3"
+        className="transition-all duration-1000 ease-in-out"
+      />
+
+      {/* Cabo saindo da polia baixa até a tornozeleira */}
+      <line
+        x1="24"
+        y1="140"
+        x2={isExtended ? '128' : '82'}
+        y2={isExtended ? '106' : '142'}
+        stroke="#8B949E"
+        strokeWidth="1.5"
+        strokeDasharray="3 2"
+        className="transition-all duration-1000 ease-in-out"
+      />
+    </svg>
+  );
+}
+
+// 13. GÊMEOS SENTADO NA MÁQUINA / CAVALINHO (leg-5-seated / calfSeated)
+export function CalfRaiseSeatedSvg({ phase, accentColor }: SvgModelProps) {
+  const isUp = phase === 'concentric';
+  return (
+    <svg viewBox="0 0 160 160" className="w-44 h-44" aria-label="Gêmeos Sentado na Máquina (Cavalinho)">
+      <line x1="20" y1="148" x2="145" y2="148" stroke="#30363D" strokeWidth="4" />
+
+      {/* Banco sentado */}
+      <rect x="35" y="88" width="35" height="8" rx="2" fill="#21262D" stroke="#30363D" strokeWidth="1.5" />
+      <line x1="45" y1="96" x2="45" y2="148" stroke="#21262D" strokeWidth="4" />
+
+      {/* Degrau de apoio para ponta dos pés */}
+      <rect x="105" y="136" width="30" height="8" rx="2" fill="#30363D" />
+
+      {/* Atleta sentado */}
+      <circle cx="50" cy="46" r="8" fill="#161B22" stroke="#FFFFFF" strokeWidth="2" />
+      <line x1="50" y1="54" x2="55" y2="92" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+      {/* Coxa horizontal até o joelho */}
+      <line x1="55" y1="92" x2="98" y2="92" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+
+      {/* Almofada sobre a coxa/joelho e suporte com anilhas subindo/descendo */}
+      <g className="transition-transform duration-1000 ease-in-out" style={{ transform: isUp ? 'translateY(-12px)' : 'translateY(4px)' }}>
+        <rect x="90" y="80" width="16" height="8" rx="2" fill="#8B949E" />
+        <rect x="94" y="65" width="8" height="15" rx="1" fill="#484F58" />
+        <circle cx="98" cy="62" r="7" fill={accentColor} className="opacity-80 drop-shadow-[0_0_6px_currentColor]" />
+      </g>
+
+      {/* Canela e Sóleo/Panturrilha - Joelho a 90°, calcanhar subindo e descendo */}
+      <line
+        x1="98"
+        y1={isUp ? '80' : '96'}
+        x2="114"
+        y2={isUp ? '122' : '142'}
+        stroke={accentColor}
+        strokeWidth="6"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out drop-shadow-[0_0_8px_currentColor]"
+      />
+      {/* Pé apoiado na bola do antepé sobre o degrau */}
+      <line
+        x1="114"
+        y1={isUp ? '122' : '142'}
+        x2="126"
+        y2="136"
+        stroke="#E6EDF3"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        className="transition-all duration-1000 ease-in-out"
+      />
+    </svg>
+  );
+}
+
 // Aliases
 export const SquatLegPressSvg = SquatSmithSvg;
 export const CalfRaiseStandingSvg = CalfRaiseSvg;

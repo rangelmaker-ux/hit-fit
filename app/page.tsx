@@ -240,12 +240,17 @@ export default function Home() {
     );
     if (!altItem) return;
 
-    const previousPrimary = targetEx.machines.primary;
+    const previousPrimary = {
+      ...targetEx.machines.primary,
+      reps: targetEx.reps,
+      restSeconds: targetEx.restSeconds,
+      biomechanics: targetEx.biomechanics
+    };
     const newAlternatives = [
       ...targetEx.machines.alternatives.filter(
         (a) => a !== altItem && a.variantId !== targetIdentifier && a.name !== targetIdentifier
       ),
-      { ...previousPrimary }
+      previousPrimary
     ];
 
     const newVariantId = altItem.variantId || altItem.animationKey || `${targetEx.id}-alt`;
@@ -258,6 +263,8 @@ export default function Home() {
       name: newName,
       activeVariantId: newVariantId,
       animationKey: newAnimationKey,
+      reps: altItem.reps || targetEx.reps,
+      restSeconds: altItem.restSeconds || targetEx.restSeconds,
       machines: {
         primary: {
           ...altItem,
@@ -270,11 +277,15 @@ export default function Home() {
         },
         alternatives: newAlternatives
       },
-      biomechanics: registryItem ? {
-        ...targetEx.biomechanics,
-        setup: registryItem.settingTips || targetEx.biomechanics.setup,
-        execution: registryItem.description || targetEx.biomechanics.execution
-      } : targetEx.biomechanics
+      biomechanics: altItem.biomechanics
+        ? altItem.biomechanics
+        : registryItem
+        ? {
+            ...targetEx.biomechanics,
+            setup: registryItem.settingTips || targetEx.biomechanics.setup,
+            execution: registryItem.description || targetEx.biomechanics.execution
+          }
+        : targetEx.biomechanics
     };
 
     setSelectedExercise(updatedExercise);
