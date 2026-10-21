@@ -30,6 +30,8 @@ interface AuthResponse {
 export interface SetupStatusResponse {
   cloudConnected: boolean;
   isSetupNeeded: boolean;
+  adminKeyConfigured?: boolean;
+  audit?: Record<string, unknown>;
   accounts?: Array<{
     id: string;
     username: string;

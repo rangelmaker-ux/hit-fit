@@ -12,12 +12,14 @@ import {
   KeyRound,
   ShieldCheck,
   X,
-  RotateCcw
+  RotateCcw,
+  Sparkles
 } from 'lucide-react';
 import { getAvatar } from '@/lib/avatar-storage';
 import {
   loginAthlete,
   adminSetupPins,
+  checkSetupStatus,
   AuthenticatedUser
 } from '@/lib/auth-client';
 
@@ -36,7 +38,9 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
   const [blockedRetryAfter, setBlockedRetryAfter] = useState<number | null>(null);
   const [avatars, setAvatars] = useState<Record<string, string | null>>({});
 
-  // Estados do Modal de Recuperação Administrativa
+  // Estados do Modal de Configuração Inicial / Recuperação Administrativa
+  const [isSetupNeeded, setIsSetupNeeded] = useState(false);
+  const [adminKeyConfigured, setAdminKeyConfigured] = useState(false);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [adminKey, setAdminKey] = useState('');
   const [showAdminKey, setShowAdminKey] = useState(false);
@@ -57,13 +61,25 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
 
     Promise.all([
       getAvatar('person-rangel'),
-      getAvatar('person-geicsania')
-    ]).then(([rangelUrl, jackUrl]) => {
+      getAvatar('person-geicsania'),
+      checkSetupStatus()
+    ]).then(([rangelUrl, jackUrl, status]) => {
       if (active) {
         setAvatars({
           rangel: rangelUrl,
           jack: jackUrl
         });
+
+        if (status) {
+          setIsSetupNeeded(Boolean(status.isSetupNeeded));
+          if (status.adminKeyConfigured !== undefined) {
+            setAdminKeyConfigured(Boolean(status.adminKeyConfigured));
+          }
+          // Se o banco estiver zerado (primeiro acesso), abre automaticamente a tela de cadastro dos PINs
+          if (status.isSetupNeeded) {
+            setShowRecoveryModal(true);
+          }
+        }
       }
     });
 
@@ -99,6 +115,14 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
     const res = await loginAthlete(selectedRole, pin);
     if (!res.success || !res.user) {
       setLoading(false);
+
+      if (res.status === 404 || res.code === 'USER_NOT_FOUND') {
+        setIsSetupNeeded(true);
+        setShowRecoveryModal(true);
+        setErrorMessage('Conta ainda não cadastrada no banco. Cadastre os PINs para liberar o acesso.');
+        return;
+      }
+
       setErrorMessage(res.error || 'PIN incorreto. Verifique os dígitos e tente novamente.');
       if (res.remainingAttempts !== undefined) {
         setRemainingAttempts(res.remainingAttempts);
@@ -121,13 +145,15 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
     setRecoveryError(null);
     setRecoverySuccess(null);
 
-    if (!adminKey.trim()) {
+    // Se as contas já existem ou se a chave de admin estiver configurada na Vercel, a chave é exigida
+    const mustRequireAdminKey = adminKeyConfigured || !isSetupNeeded;
+    if (mustRequireAdminKey && !adminKey.trim()) {
       setRecoveryError('Informe a chave administrativa (HITFIT_ADMIN_KEY).');
       return;
     }
 
     if (!/^\d{6}$/.test(pinRangel.trim())) {
-      setRecoveryError('O novo PIN de Rangel deve ter exatamente 6 dígitos numéricos.');
+      setRecoveryError('O PIN de Rangel deve ter exatamente 6 dígitos numéricos.');
       return;
     }
 
@@ -137,7 +163,7 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
     }
 
     if (!/^\d{6}$/.test(pinJack.trim())) {
-      setRecoveryError('O novo PIN de Jack deve ter exatamente 6 dígitos numéricos.');
+      setRecoveryError('O PIN de Jack deve ter exatamente 6 dígitos numéricos.');
       return;
     }
 
@@ -158,16 +184,31 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
     setRecoveryLoading(false);
 
     if (!res.success) {
-      setRecoveryError(res.error || 'Falha ao redefinir PINs. Verifique a chave administrativa.');
+      setRecoveryError(res.error || 'Falha ao gravar PINs. Verifique a chave administrativa.');
       return;
     }
 
-    setRecoverySuccess('PINs de Rangel e Jack atualizados com sucesso no banco!');
-    setTimeout(() => {
+    setRecoverySuccess('PINs de Rangel e Jack salvos com sucesso no banco de dados!');
+    setIsSetupNeeded(false);
+
+    const activePin = selectedRole === 'jack' ? pinJack.trim() : pinRangel.trim();
+    setPin(activePin);
+
+    setTimeout(async () => {
       setShowRecoveryModal(false);
       setRecoverySuccess(null);
       setErrorMessage(null);
-      setPin(selectedRole === 'jack' ? pinJack.trim() : pinRangel.trim());
+
+      // Tenta login imediato com a credencial recém-provisionada
+      setLoading(true);
+      const loginRes = await loginAthlete(selectedRole, activePin);
+      setLoading(false);
+      if (loginRes.success && loginRes.user) {
+        setAuthSuccess(true);
+        setTimeout(() => {
+          onAuthenticated(loginRes.user!);
+        }, 500);
+      }
     }, 1200);
   };
 
@@ -198,6 +239,23 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
           </h1>
         </div>
       </div>
+
+      {/* BANNER INFORMATIVO SE BANCO ZERADO */}
+      {isSetupNeeded && (
+        <div className="w-full mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} className="shrink-0 text-amber-400 animate-pulse" />
+            <span className="font-semibold">Primeiro Acesso: Contas prontas para ativação</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowRecoveryModal(true)}
+            className="px-2.5 py-1 rounded-lg bg-amber-400 text-black font-black text-[10px] uppercase tracking-wider hover:bg-amber-300 transition-colors"
+          >
+            Ativar Agora
+          </button>
+        </div>
+      )}
 
       {/* CARD PRINCIPAL DE LOGIN */}
       <div className="w-full max-w-full bg-[#0E121A] rounded-3xl border border-white/10 p-6 shadow-2xl relative overflow-x-hidden">
@@ -401,13 +459,17 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
             style={{ touchAction: 'manipulation' }}
           >
             <KeyRound size={13} className="text-[#C4F53C]" />
-            <span>Esqueceu o PIN? Redefinir com Chave Administrativa</span>
+            <span>
+              {isSetupNeeded
+                ? 'Ativação Inicial de PINs de Rangel e Jack'
+                : 'Esqueceu o PIN? Redefinir com Chave Administrativa'}
+            </span>
           </button>
         </div>
 
       </div>
 
-      {/* MODAL DE RECUPERAÇÃO ADMINISTRATIVA SEGURA */}
+      {/* MODAL DE CONFIGURAÇÃO INICIAL / RECUPERAÇÃO ADMINISTRATIVA SEGURA */}
       {showRecoveryModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
           <div className="w-full max-w-md bg-[#0E121A] border border-white/15 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
@@ -419,22 +481,30 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
                   <ShieldCheck size={20} />
                 </div>
                 <div>
-                  <h2 className="text-base font-black text-white">Recuperação de Acesso</h2>
-                  <p className="text-[11px] font-mono text-neutral-400">Painel Administrativo do Proprietário</p>
+                  <h2 className="text-base font-black text-white">
+                    {isSetupNeeded ? 'Configuração Inicial de Acesso' : 'Recuperação de Acesso'}
+                  </h2>
+                  <p className="text-[11px] font-mono text-neutral-400">
+                    {isSetupNeeded ? 'Ativação no Banco Permanente' : 'Painel do Proprietário'}
+                  </p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowRecoveryModal(false)}
-                className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors"
-              >
-                <X size={16} />
-              </button>
+              {!isSetupNeeded && (
+                <button
+                  type="button"
+                  onClick={() => setShowRecoveryModal(false)}
+                  className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
 
             <p className="text-xs text-neutral-300 leading-relaxed">
-              Informe a chave <strong className="text-white font-mono">HITFIT_ADMIN_KEY</strong> configurada na Vercel para cadastrar novos PINs de 6 dígitos sem precisar informar o PIN antigo.
+              {isSetupNeeded
+                ? 'Defina os PINs de 6 dígitos numéricos para Rangel e Jack. Uma vez cadastrados, as contas estarão gravadas permanentemente e o login será liberado.'
+                : 'Informe a chave HITFIT_ADMIN_KEY configurada na Vercel para cadastrar novos PINs de 6 dígitos sem precisar do PIN anterior.'}
             </p>
 
             {recoveryError && (
@@ -451,36 +521,38 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
               </div>
             )}
 
-            {/* FORMULÁRIO DE REDEFINIÇÃO */}
+            {/* FORMULÁRIO DE CADASTRO / REDEFINIÇÃO */}
             <form onSubmit={handleAdminResetPins} className="flex flex-col gap-3.5">
               
-              {/* CHAVE ADMINISTRATIVA */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-mono font-bold text-neutral-300 flex items-center justify-between">
-                  <span>CHAVE ADMINISTRATIVA (HITFIT_ADMIN_KEY):</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminKey(!showAdminKey)}
-                    className="text-neutral-400 hover:text-white flex items-center gap-1 text-[10px]"
-                  >
-                    {showAdminKey ? <EyeOff size={11} /> : <Eye size={11} />}
-                    <span>{showAdminKey ? 'Ocultar' : 'Mostrar'}</span>
-                  </button>
-                </label>
-                <input
-                  type={showAdminKey ? 'text' : 'password'}
-                  value={adminKey}
-                  onChange={(e) => setAdminKey(e.target.value)}
-                  placeholder="Insira a chave mestra configurada"
-                  className="w-full p-3 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono text-sm outline-none focus:border-[#C4F53C]"
-                  style={{ fontSize: '16px', touchAction: 'manipulation' }}
-                />
-              </div>
+              {/* CHAVE ADMINISTRATIVA (SE CONFIGURADA OU SE NÃO FOR PRIMEIRO ACESSO) */}
+              {(adminKeyConfigured || !isSetupNeeded) && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-mono font-bold text-neutral-300 flex items-center justify-between">
+                    <span>CHAVE ADMINISTRATIVA (HITFIT_ADMIN_KEY):</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminKey(!showAdminKey)}
+                      className="text-neutral-400 hover:text-white flex items-center gap-1 text-[10px]"
+                    >
+                      {showAdminKey ? <EyeOff size={11} /> : <Eye size={11} />}
+                      <span>{showAdminKey ? 'Ocultar' : 'Mostrar'}</span>
+                    </button>
+                  </label>
+                  <input
+                    type={showAdminKey ? 'text' : 'password'}
+                    value={adminKey}
+                    onChange={(e) => setAdminKey(e.target.value)}
+                    placeholder="Insira a chave mestra configurada"
+                    className="w-full p-3 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono text-sm outline-none focus:border-[#C4F53C]"
+                    style={{ fontSize: '16px', touchAction: 'manipulation' }}
+                  />
+                </div>
+              )}
 
               {/* SEÇÃO RANGEL */}
               <div className="p-3 rounded-2xl bg-[#141C15]/70 border border-[#C4F53C]/30 flex flex-col gap-2">
                 <span className="text-[11px] font-mono font-black text-[#C4F53C] uppercase tracking-wider">
-                  NOVO PIN PARA RANGEL:
+                  PIN PARA RANGEL:
                 </span>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -517,7 +589,7 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
               {/* SEÇÃO JACK */}
               <div className="p-3 rounded-2xl bg-[#220E1A]/70 border border-[#FF267A]/30 flex flex-col gap-2">
                 <span className="text-[11px] font-mono font-black text-[#FF267A] uppercase tracking-wider">
-                  NOVO PIN PARA JACK:
+                  PIN PARA JACK:
                 </span>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -551,24 +623,26 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
                 </div>
               </div>
 
-              {/* OPÇÃO DE REINICIALIZAÇÃO TOTAL DE DADOS */}
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  id="resetDataCheckbox"
-                  checked={resetData}
-                  onChange={(e) => setResetData(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-amber-500 text-amber-500 focus:ring-0 cursor-pointer"
-                />
-                <label htmlFor="resetDataCheckbox" className="text-xs text-amber-200 cursor-pointer select-none">
-                  <strong>Reinicializar do zero:</strong> apagar biometria, históricos e treinos anteriores para começar limpo (autorizado pelo proprietário).
-                </label>
-              </div>
+              {/* OPÇÃO DE REINICIALIZAÇÃO TOTAL DE DADOS (SE NÃO FOR PRIMEIRO ACESSO) */}
+              {!isSetupNeeded && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    id="resetDataCheckbox"
+                    checked={resetData}
+                    onChange={(e) => setResetData(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-amber-500 text-amber-500 focus:ring-0 cursor-pointer"
+                  />
+                  <label htmlFor="resetDataCheckbox" className="text-xs text-amber-200 cursor-pointer select-none">
+                    <strong>Reinicializar do zero:</strong> apagar biometria e históricos anteriores para começar limpo.
+                  </label>
+                </div>
+              )}
 
               {/* BOTÃO DE CONFIRMAÇÃO */}
               <button
                 type="submit"
-                disabled={recoveryLoading || !adminKey.trim() || pinRangel.length !== 6 || pinJack.length !== 6}
+                disabled={recoveryLoading || pinRangel.length !== 6 || pinJack.length !== 6}
                 className="mt-1 w-full py-3.5 px-4 rounded-xl font-black text-sm bg-[#C4F53C] text-black shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 transition-all tap-haptic"
                 style={{ touchAction: 'manipulation' }}
               >
@@ -580,7 +654,9 @@ export function AuthLoginView({ onAuthenticated }: AuthLoginViewProps) {
                 ) : (
                   <>
                     <KeyRound size={16} />
-                    <span>Salvar Novos PINs e Liberar Acesso</span>
+                    <span>
+                      {isSetupNeeded ? 'Cadastrar PINs e Liberar Aplicativo' : 'Salvar Novos PINs e Liberar Acesso'}
+                    </span>
                   </>
                 )}
               </button>

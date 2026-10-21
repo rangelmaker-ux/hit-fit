@@ -3,15 +3,15 @@ import {
   canModifyAthleteData,
   getAuthorizedPartnerId,
   isAuthSecretConfigured
-} from '../lib/auth-crypto.ts';
+} from '../lib/auth-crypto';
 import {
   saveAthleteData,
   getAthleteData,
   PersistentStorageNotConfiguredError,
   PersistentStorageWriteError,
   isCloudConfigured
-} from '../lib/cloud-store.ts';
-import type { StoredAthleteData, CloudSavedSetState } from '../lib/cloud-store.ts';
+} from '../lib/cloud-store';
+import type { StoredAthleteData, CloudSavedSetState } from '../lib/cloud-store';
 
 export const config = {
   runtime: 'edge'

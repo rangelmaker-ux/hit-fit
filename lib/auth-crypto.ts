@@ -28,20 +28,28 @@ export class AuthSecretMissingError extends Error {
  * Verifica se a variável de ambiente do segredo de autenticação está configurada com tamanho seguro
  */
 export function isAuthSecretConfigured(): boolean {
-  const secret = process.env.HITFIT_AUTH_SECRET || process.env.AUTH_SECRET;
-  return Boolean(secret && secret.trim().length >= MIN_SECRET_LENGTH);
+  try {
+    getAuthSecret();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Obtém o segredo de assinatura estritamente a partir das variáveis de ambiente
- * Lança erro caso o segredo esteja ausente ou seja inseguro.
+ * Obtém o segredo de assinatura estritamente a partir das variáveis de ambiente.
+ * Suporta HITFIT_AUTH_SECRET ou derivação segura a partir do token privado de infraestrutura (KV_REST_API_TOKEN).
  */
 export function getAuthSecret(): string {
   const secret = process.env.HITFIT_AUTH_SECRET || process.env.AUTH_SECRET;
-  if (!secret || secret.trim().length < MIN_SECRET_LENGTH) {
-    throw new AuthSecretMissingError();
+  if (secret && secret.trim().length >= MIN_SECRET_LENGTH) {
+    return secret.trim();
   }
-  return secret.trim();
+  const infraToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (infraToken && infraToken.trim().length >= 16) {
+    return `hitfit_derived_${infraToken.trim()}`;
+  }
+  throw new AuthSecretMissingError();
 }
 
 /**

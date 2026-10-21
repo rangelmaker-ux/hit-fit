@@ -9,8 +9,8 @@ import {
   verifyAdminKey,
   isAuthSecretConfigured,
   canModifyAthleteData
-} from '../lib/auth-crypto.ts';
-import type { AllowedRole } from '../lib/auth-crypto.ts';
+} from '../lib/auth-crypto';
+import type { AllowedRole } from '../lib/auth-crypto';
 import {
   updateUserAccount,
   getUserAccount,
@@ -25,8 +25,8 @@ import {
   adminSetupUserPins,
   isCloudConfigured,
   isProductionEnvironment
-} from '../lib/cloud-store.ts';
-import type { StoredUserAccount } from '../lib/cloud-store.ts';
+} from '../lib/cloud-store';
+import type { StoredUserAccount } from '../lib/cloud-store';
 
 export const config = {
   runtime: 'edge'
@@ -115,10 +115,43 @@ export default async function handler(req: Request) {
     const hasJack = Boolean(userJack);
     const isSetupNeeded = !hasRangel || !hasJack;
 
+    const providedAdminKey = (
+      req.headers.get('x-admin-key') ||
+      (req.headers.get('authorization')?.startsWith('Bearer ')
+        ? req.headers.get('authorization')!.slice(7)
+        : '')
+    ).trim();
+
+    const isAuthorizedAdmin = isAdminKeyConfigured() && verifyAdminKey(providedAdminKey);
+
     return jsonResponse(200, {
       cloudConnected: isCloudConfigured(),
       isSetupNeeded,
       adminKeyConfigured: isAdminKeyConfigured(),
+      ...(isAuthorizedAdmin
+        ? {
+            audit: {
+              personRangel: userRangel
+                ? {
+                    id: userRangel.id,
+                    username: userRangel.username,
+                    hasSalt: Boolean(userRangel.salt && userRangel.salt.length >= 16),
+                    hasHash: Boolean(userRangel.passwordHash && userRangel.passwordHash.length >= 32),
+                    updatedAt: userRangel.updatedAt
+                  }
+                : null,
+              personJack: userJack
+                ? {
+                    id: userJack.id,
+                    username: userJack.username,
+                    hasSalt: Boolean(userJack.salt && userJack.salt.length >= 16),
+                    hasHash: Boolean(userJack.passwordHash && userJack.passwordHash.length >= 32),
+                    updatedAt: userJack.updatedAt
+                  }
+                : null
+            }
+          }
+        : {}),
       accounts: [
         {
           id: 'person-rangel',
@@ -206,23 +239,29 @@ export default async function handler(req: Request) {
   // ==========================================
   // AÇÃO ADMINISTRATIVA: CONFIGURAÇÃO / REDEFINIÇÃO DE PINs
   // Define ou redefine os PINs de 6 dígitos para Rangel e Jack.
-  // EXIGE estritamente a chave administrativa do proprietário (HITFIT_ADMIN_KEY).
-  // Suporta PINs individuais e preservação opcional de perfil.
+  // Se for primeiro setup com banco zerado, permite ao proprietário provisionar.
+  // Se as contas já existem ou a chave estiver configurada, exige HITFIT_ADMIN_KEY.
   // ==========================================
   if (action === 'setup_pins' || action === 'admin_setup_pins') {
-    if (!isAdminKeyConfigured()) {
-      return jsonResponse(503, {
-        error: 'A chave administrativa do proprietário (HITFIT_ADMIN_KEY) não está configurada no servidor. Configure HITFIT_ADMIN_KEY no painel da Vercel para autorizar o gerenciamento de PINs.',
-        code: 'ADMIN_KEY_NOT_CONFIGURED'
-      });
-    }
+    const existingRangel = await getUserAccount('person-rangel');
+    const existingJack = await getUserAccount('person-geicsania');
+    const isFirstSetup = !existingRangel && !existingJack;
 
-    const providedAdminKey = getProvidedAdminKey();
-    if (!verifyAdminKey(providedAdminKey)) {
-      return jsonResponse(401, {
-        error: 'Chave administrativa não autorizada. O provisionamento e redefinição de PINs só pode ser realizado pelo proprietário com a chave correta.',
-        code: 'UNAUTHORIZED_ADMIN'
-      });
+    if (!isFirstSetup || isAdminKeyConfigured()) {
+      if (!isAdminKeyConfigured()) {
+        return jsonResponse(503, {
+          error: 'A chave administrativa do proprietário (HITFIT_ADMIN_KEY) não está configurada no servidor. Configure HITFIT_ADMIN_KEY no painel da Vercel para autorizar o gerenciamento de PINs.',
+          code: 'ADMIN_KEY_NOT_CONFIGURED'
+        });
+      }
+
+      const providedAdminKey = getProvidedAdminKey();
+      if (!verifyAdminKey(providedAdminKey)) {
+        return jsonResponse(401, {
+          error: 'Chave administrativa não autorizada. O provisionamento e redefinição de PINs só pode ser realizado pelo proprietário com a chave correta.',
+          code: 'UNAUTHORIZED_ADMIN'
+        });
+      }
     }
 
     const pinRangel = (
