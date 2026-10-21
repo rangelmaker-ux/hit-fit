@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useSyncExternalStore } from 'react';
-import { WORKOUT_DAYS, Exercise, DayWorkout } from '@/lib/workout-data';
+import React, { useEffect, useState, useCallback, useMemo, useSyncExternalStore } from 'react';
+import { WORKOUT_DAYS, Exercise } from '@/lib/workout-data';
 import { ExerciseDetailModal } from '@/components/exercise-detail-modal';
 import { HealthHubView, HealthSubTab } from '@/components/health-hub-view';
 import { EvolutionView } from '@/components/evolution-view';
@@ -29,13 +29,15 @@ import {
   BIOMETRICS_EVENT,
   UnifiedBiometrics
 } from '@/lib/biometrics';
-import { getVariantRegistryItem } from '@/lib/animation-registry';
 import { Dumbbell, Shield, LogOut, Watch, Lock } from 'lucide-react';
-
-interface SavedSetState {
-  done: boolean;
-  weightKg?: string;
-}
+import {
+  SavedSetState,
+  swapExerciseVariant,
+  applyStoredVariantsToWorkouts,
+  getStoredVariantsForProfile,
+  saveStoredVariantsForProfile,
+  recordSetWithVariant
+} from '@/lib/workout-variants';
 
 const PEOPLE_CONFIG = [
   { id: 'person-rangel', name: 'Rangel' },
@@ -81,7 +83,23 @@ export default function Home() {
   const [healthSubTab, setHealthSubTab] = useState<HealthSubTab>('alimentacao');
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
-  const [workouts, setWorkouts] = useState<DayWorkout[]>(WORKOUT_DAYS);
+  const [profileVariants, setProfileVariants] = useState<Record<string, Record<string, string>>>(() => {
+    if (typeof window !== 'undefined') {
+      return {
+        'person-rangel': getStoredVariantsForProfile('person-rangel'),
+        'person-geicsania': getStoredVariantsForProfile('person-geicsania')
+      };
+    }
+    return {
+      'person-rangel': {},
+      'person-geicsania': {}
+    };
+  });
+
+  const workouts = useMemo(() => {
+    const activeVariants = profileVariants[activeProfile] || {};
+    return applyStoredVariantsToWorkouts(WORKOUT_DAYS, activeVariants);
+  }, [activeProfile, profileVariants]);
   const [savedSets, setSavedSets] = useState<Record<string, SavedSetState>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -205,10 +223,14 @@ export default function Home() {
   const toggleSet = (exerciseId: string, setIdx: number) => {
     if (isReadOnly) return;
     const key = getSetKey(dayIndex, exerciseId, setIdx);
+    const ex = todayWorkout.exercises.find((e) => e.id === exerciseId);
+    if (!ex) return;
+
     setSavedSets((prev) => {
-      const current = prev[key] || { done: false };
-      const nextDone = !current.done;
-      const updated = { ...prev, [key]: { ...current, done: nextDone } };
+      const current = prev[key];
+      const nextDone = !(current?.done);
+      const updatedItem = recordSetWithVariant(current, ex, nextDone);
+      const updated = { ...prev, [key]: updatedItem };
       
       // Sincroniza com a nuvem
       if (currentUser) {
@@ -222,9 +244,13 @@ export default function Home() {
   const updateSetWeight = (exerciseId: string, setIdx: number, weightKg: string) => {
     if (isReadOnly) return;
     const key = getSetKey(dayIndex, exerciseId, setIdx);
+    const ex = todayWorkout.exercises.find((e) => e.id === exerciseId);
+    if (!ex) return;
+
     setSavedSets((prev) => {
-      const current = prev[key] || { done: false };
-      const updated = { ...prev, [key]: { ...current, weightKg } };
+      const current = prev[key];
+      const updatedItem = recordSetWithVariant(current, ex, current?.done ?? false, weightKg);
+      const updated = { ...prev, [key]: updatedItem };
       if (currentUser) {
         pushSyncData({ userId: currentUser.id, savedSets: updated });
       }
@@ -233,68 +259,25 @@ export default function Home() {
   };
 
   const handleSwapExercise = (targetIdentifier: string) => {
+    if (isReadOnly) return;
     if (!selectedExercise) return;
     const targetEx = selectedExercise;
-    const altItem = targetEx.machines.alternatives.find(
-      (a) => a.variantId === targetIdentifier || a.name === targetIdentifier
-    );
-    if (!altItem) return;
-
-    const previousPrimary = {
-      ...targetEx.machines.primary,
-      reps: targetEx.reps,
-      restSeconds: targetEx.restSeconds,
-      biomechanics: targetEx.biomechanics
-    };
-    const newAlternatives = [
-      ...targetEx.machines.alternatives.filter(
-        (a) => a !== altItem && a.variantId !== targetIdentifier && a.name !== targetIdentifier
-      ),
-      previousPrimary
-    ];
-
-    const newVariantId = altItem.variantId || altItem.animationKey || `${targetEx.id}-alt`;
-    const newAnimationKey = altItem.animationKey || targetEx.animationKey;
-    const newName = altItem.name;
-    const registryItem = getVariantRegistryItem(newVariantId);
-
-    const updatedExercise: Exercise = {
-      ...targetEx,
-      name: newName,
-      activeVariantId: newVariantId,
-      animationKey: newAnimationKey,
-      reps: altItem.reps || targetEx.reps,
-      restSeconds: altItem.restSeconds || targetEx.restSeconds,
-      machines: {
-        primary: {
-          ...altItem,
-          variantId: newVariantId,
-          name: altItem.name,
-          description: altItem.description,
-          settingTips: altItem.settingTips || previousPrimary.settingTips,
-          animationKey: newAnimationKey,
-          animationStatus: altItem.animationStatus || 'verified'
-        },
-        alternatives: newAlternatives
-      },
-      biomechanics: altItem.biomechanics
-        ? altItem.biomechanics
-        : registryItem
-        ? {
-            ...targetEx.biomechanics,
-            setup: registryItem.settingTips || targetEx.biomechanics.setup,
-            execution: registryItem.description || targetEx.biomechanics.execution
-          }
-        : targetEx.biomechanics
-    };
+    const updatedExercise = swapExerciseVariant(targetEx, targetIdentifier);
+    if (updatedExercise === targetEx) return;
 
     setSelectedExercise(updatedExercise);
 
-    setWorkouts((prevWorkouts) => {
-      return prevWorkouts.map((day) => ({
-        ...day,
-        exercises: day.exercises.map((ex) => (ex.id === targetEx.id ? updatedExercise : ex))
-      }));
+    setProfileVariants((prev) => {
+      const current = prev[activeProfile] || {};
+      const updated = {
+        ...current,
+        [targetEx.id]: updatedExercise.activeVariantId
+      };
+      saveStoredVariantsForProfile(activeProfile, updated);
+      return {
+        ...prev,
+        [activeProfile]: updated
+      };
     });
   };
 
@@ -643,7 +626,7 @@ export default function Home() {
           exercise={selectedExercise}
           accentColor={accentColor}
           onClose={() => setSelectedExercise(null)}
-          onSwapExercise={handleSwapExercise}
+          onSwapExercise={isReadOnly ? undefined : handleSwapExercise}
         />
       )}
 

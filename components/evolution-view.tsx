@@ -13,7 +13,17 @@ interface EvolutionViewProps {
   profileId: string;
   profileName: string;
   currentWeek: string;
-  savedSets: Record<string, { done: boolean; weightKg?: string }>;
+  savedSets: Record<
+    string,
+    {
+      done: boolean;
+      weightKg?: string;
+      variantId?: string;
+      equipmentName?: string;
+      exerciseName?: string;
+      reps?: string;
+    }
+  >;
   accentColor?: string;
 }
 
@@ -32,12 +42,14 @@ export function EvolutionView({
     maxWeight: number;
     completedSetsCount: number;
     recommendedNextWeight: number;
+    equipmentsUsed?: string[];
   }[] = [];
 
   WORKOUT_DAYS.forEach((day, dIdx) => {
     day.exercises.forEach((ex) => {
       let maxW = 0;
       let completedCount = 0;
+      const equipmentsSet = new Set<string>();
 
       for (let s = 0; s < ex.sets; s++) {
         const key = `${currentWeek}:${profileId}:${dIdx}:${ex.id}:${s}`;
@@ -46,6 +58,9 @@ export function EvolutionView({
           completedCount++;
           const w = parseFloat(item.weightKg || '0');
           if (w > maxW) maxW = w;
+          if (item.equipmentName) {
+            equipmentsSet.add(item.equipmentName);
+          }
         }
       }
 
@@ -58,7 +73,8 @@ export function EvolutionView({
           targetMuscle: ex.targetMuscle,
           maxWeight: maxW,
           completedSetsCount: completedCount,
-          recommendedNextWeight: nextW
+          recommendedNextWeight: nextW,
+          equipmentsUsed: Array.from(equipmentsSet)
         });
       }
     });
@@ -150,6 +166,19 @@ export function EvolutionView({
                     </span>
                   </div>
                   <h4 className="text-sm font-bold text-white">{item.exerciseName}</h4>
+                  {item.equipmentsUsed && item.equipmentsUsed.length > 0 && (
+                    <div className="flex flex-wrap gap-1 my-1">
+                      {item.equipmentsUsed.map((eq, i) => (
+                        <span 
+                          key={i} 
+                          className="text-[9px] font-medium px-2 py-0.5 rounded-md border border-white/10"
+                          style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
+                        >
+                          {eq}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <span className="text-[11px] text-neutral-400">
                     {item.completedSetsCount} séries registradas
                   </span>

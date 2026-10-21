@@ -37,6 +37,11 @@ import {
   getAllRegistryItems,
   getAllVariants
 } from '../lib/animation-registry.ts';
+import {
+  swapExerciseVariant,
+  applyStoredVariantsToWorkouts,
+  recordSetWithVariant
+} from '../lib/workout-variants.ts';
 
 // Loader recursivo para compilar e transpilar arquivos TypeScript/TSX em memória
 const __filename = fileURLToPath(import.meta.url);
@@ -661,3 +666,157 @@ test('7. Eliminação Total de Modelos Incompatíveis: 8 novos aparelhos possuem
   const seatedCalfSvg = CalfRaiseSeatedSvg({ phase: 'concentric', accentColor: '#c3f75a' });
   assert.equal(seatedCalfSvg.type, 'svg');
 });
+
+// ============================================================================
+// TESTE 8: Atualização Anatômica e Muscle Map na Troca de Variantes
+// ============================================================================
+test('8. Conformidade Anatômica: handleSwapExercise atualiza targetMuscle, secondaryMuscles e activeBodyParts sem copiar do original', () => {
+  const legDay = WORKOUT_DAYS.find((d) => d.dayShort === 'SEG');
+  const leg4Base = legDay.exercises.find((e) => e.id === 'leg-4');
+
+  // Estado inicial: Mesa Flexora (Deitado)
+  assert.equal(leg4Base.activeVariantId, 'leg-4-prone');
+  assert.equal(leg4Base.targetMuscle, 'Isquiotibiais (Posterior de Coxa)');
+  assert.deepEqual(leg4Base.activeBodyParts.front, []);
+  assert.deepEqual(leg4Base.activeBodyParts.back, ['hamstrings']);
+
+  // Troca para Stiff com Halteres (leg-4-stiff)
+  const leg4Stiff = swapExerciseVariant(leg4Base, 'leg-4-stiff');
+  assert.equal(leg4Stiff.activeVariantId, 'leg-4-stiff');
+  assert.equal(leg4Stiff.name, 'Stiff com Halteres');
+  assert.equal(leg4Stiff.animationKey, 'stiffDumbbell');
+  assert.equal(leg4Stiff.targetMuscle, 'Isquiotibiais & Glúteo Máximo');
+  assert.ok(leg4Stiff.secondaryMuscles.includes('Glúteo Máximo'));
+  assert.ok(leg4Stiff.secondaryMuscles.includes('Eretores da Espinha'));
+  assert.ok(leg4Stiff.activeBodyParts.back.includes('hamstrings'));
+  assert.ok(leg4Stiff.activeBodyParts.back.includes('glutes'));
+  assert.ok(leg4Stiff.activeBodyParts.back.includes('lowerback'));
+  assert.equal(leg4Stiff.reps, '10 - 12');
+  assert.equal(leg4Stiff.restSeconds, 60);
+
+  // Round-trip fiel: troca de volta para Mesa Flexora
+  const leg4Restored = swapExerciseVariant(leg4Stiff, 'leg-4-prone');
+  assert.equal(leg4Restored.activeVariantId, 'leg-4-prone');
+  assert.equal(leg4Restored.targetMuscle, 'Isquiotibiais (Posterior de Coxa)');
+  assert.deepEqual(leg4Restored.activeBodyParts.back, ['hamstrings']);
+  assert.ok(!leg4Restored.activeBodyParts.back.includes('glutes'));
+  assert.ok(!leg4Restored.activeBodyParts.back.includes('lowerback'));
+
+  // Teste Prancha (back-6-floor) -> Abdominal na Bola Suíça (back-6-ball)
+  const backDay = WORKOUT_DAYS.find((d) => d.dayShort === 'TER');
+  const back6Base = backDay.exercises.find((e) => e.id === 'back-6');
+  assert.equal(back6Base.activeVariantId, 'back-6-floor');
+  assert.ok(back6Base.activeBodyParts.back.includes('lowerback'));
+
+  const back6Ball = swapExerciseVariant(back6Base, 'back-6-ball');
+  assert.equal(back6Ball.activeVariantId, 'back-6-ball');
+  assert.equal(back6Ball.targetMuscle, 'Reto Abdominal (Isolamento Anterior)');
+  assert.ok(back6Ball.secondaryMuscles.includes('Oblíquos'));
+  assert.deepEqual(back6Ball.activeBodyParts.front, ['abs']);
+  assert.deepEqual(back6Ball.activeBodyParts.back, []); // Bola suíça apoia a lombar, sem sobrecarga isométrica dorsal
+  assert.equal(back6Ball.reps, '15 - 20');
+
+  // Teste Búlgaro (glute-2-bulgarian) -> Sumô no Step (glute-2-sumo)
+  const gluteDay = WORKOUT_DAYS.find((d) => d.dayShort === 'QUI');
+  const glute2Base = gluteDay.exercises.find((e) => e.id === 'glute-2');
+  assert.equal(glute2Base.activeVariantId, 'glute-2-bulgarian');
+
+  const glute2Sumo = swapExerciseVariant(glute2Base, 'glute-2-sumo');
+  assert.equal(glute2Sumo.activeVariantId, 'glute-2-sumo');
+  assert.equal(glute2Sumo.targetMuscle, 'Glúteo Máximo & Adutores da Coxa');
+  assert.ok(glute2Sumo.secondaryMuscles.includes('Quadríceps'));
+  assert.ok(glute2Sumo.secondaryMuscles.includes('Isquiotibiais'));
+  assert.deepEqual(glute2Sumo.activeBodyParts.front, ['quads']);
+  assert.deepEqual(glute2Sumo.activeBodyParts.back, ['glutes']);
+  assert.equal(glute2Sumo.reps, '12 - 15');
+});
+
+// ============================================================================
+// TESTE 9: Histórico Preciso por Série e Não Sobrescrita Retroativa
+// ============================================================================
+test('9. Histórico por Série: Troca no meio do treino preserva a máquina das séries anteriores', () => {
+  const legDay = WORKOUT_DAYS.find((d) => d.dayShort === 'SEG');
+  const leg4Initial = legDay.exercises.find((e) => e.id === 'leg-4');
+
+  // Série 0 e 1 feitas na Mesa Flexora
+  const set0 = recordSetWithVariant(undefined, leg4Initial, true, '45');
+  assert.equal(set0.done, true);
+  assert.equal(set0.variantId, 'leg-4-prone');
+  assert.equal(set0.equipmentName, 'Mesa Flexora (Deitado)');
+  assert.equal(set0.weightKg, '45');
+
+  const set1 = recordSetWithVariant(undefined, leg4Initial, true, '45');
+  assert.equal(set1.done, true);
+  assert.equal(set1.variantId, 'leg-4-prone');
+  assert.equal(set1.equipmentName, 'Mesa Flexora (Deitado)');
+
+  // Usuário troca para Stiff com Halteres no meio do treino
+  const leg4Swapped = swapExerciseVariant(leg4Initial, 'leg-4-stiff');
+  assert.equal(leg4Swapped.activeVariantId, 'leg-4-stiff');
+
+  // Séries 2 e 3 feitas no Stiff
+  const set2 = recordSetWithVariant(undefined, leg4Swapped, true, '36');
+  assert.equal(set2.done, true);
+  assert.equal(set2.variantId, 'leg-4-stiff');
+  assert.equal(set2.equipmentName, 'Stiff com Halteres');
+  assert.equal(set2.weightKg, '36');
+
+  const set3 = recordSetWithVariant(undefined, leg4Swapped, true, '36');
+  assert.equal(set3.done, true);
+  assert.equal(set3.variantId, 'leg-4-stiff');
+  assert.equal(set3.equipmentName, 'Stiff com Halteres');
+
+  // REGRA INVIOLÁVEL: As séries 0 e 1 continuam intactas na Mesa Flexora
+  assert.equal(set0.variantId, 'leg-4-prone');
+  assert.equal(set1.variantId, 'leg-4-prone');
+  assert.notEqual(set0.variantId, leg4Swapped.activeVariantId);
+
+  // Retrocompatibilidade: séries legadas sem variantId continuam operacionais
+  const legacySet = { done: true, weightKg: '50' };
+  const updatedLegacy = recordSetWithVariant(legacySet, leg4Swapped, false);
+  assert.equal(updatedLegacy.done, false);
+  assert.equal(updatedLegacy.weightKg, '50');
+  assert.equal(updatedLegacy.variantId, 'leg-4-stiff');
+});
+
+// ============================================================================
+// TESTE 10: Persistência Durável e Isolamento Estrito entre Rangel e Jack
+// ============================================================================
+test('10. Isolamento entre Perfis: Escolhas de Rangel e Jack não interferem entre si', () => {
+  const rangelPreferences = {
+    'leg-4': 'leg-4-stiff',
+    'back-6': 'back-6-ball'
+  };
+
+  const jackPreferences = {
+    'leg-4': 'leg-4-seated',
+    'back-6': 'back-6-floor'
+  };
+
+  const rangelWorkouts = applyStoredVariantsToWorkouts(WORKOUT_DAYS, rangelPreferences);
+  const jackWorkouts = applyStoredVariantsToWorkouts(WORKOUT_DAYS, jackPreferences);
+
+  // Verificação Rangel
+  const rangelLeg4 = rangelWorkouts[0].exercises.find((e) => e.id === 'leg-4');
+  const rangelBack6 = rangelWorkouts[1].exercises.find((e) => e.id === 'back-6');
+  assert.equal(rangelLeg4.activeVariantId, 'leg-4-stiff');
+  assert.equal(rangelLeg4.targetMuscle, 'Isquiotibiais & Glúteo Máximo');
+  assert.ok(rangelLeg4.activeBodyParts.back.includes('glutes'));
+  assert.equal(rangelBack6.activeVariantId, 'back-6-ball');
+  assert.deepEqual(rangelBack6.activeBodyParts.back, []);
+
+  // Verificação Jack
+  const jackLeg4 = jackWorkouts[0].exercises.find((e) => e.id === 'leg-4');
+  const jackBack6 = jackWorkouts[1].exercises.find((e) => e.id === 'back-6');
+  assert.equal(jackLeg4.activeVariantId, 'leg-4-seated');
+  assert.equal(jackLeg4.targetMuscle, 'Isquiotibiais (Encurtamento Sentado)');
+  assert.deepEqual(jackLeg4.activeBodyParts.back, ['hamstrings']);
+  assert.equal(jackBack6.activeVariantId, 'back-6-floor');
+  assert.ok(jackBack6.activeBodyParts.back.includes('lowerback'));
+
+  // Verificação de Imutabilidade do Catálogo Base
+  const baseLeg4 = WORKOUT_DAYS[0].exercises.find((e) => e.id === 'leg-4');
+  assert.equal(baseLeg4.activeVariantId, 'leg-4-prone');
+  assert.equal(baseLeg4.targetMuscle, 'Isquiotibiais (Posterior de Coxa)');
+});
+

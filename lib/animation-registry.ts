@@ -40,6 +40,14 @@ export interface EquipmentVariantMeta {
   animationId?: string;
   equipmentId?: string;
   muscleMapId?: string;
+  targetMuscle?: string;
+  activeBodyParts?: {
+    front: string[];
+    back: string[];
+  };
+  sets?: number;
+  reps?: string;
+  restSeconds?: number;
 }
 
 export const VARIANT_REGISTRY: Record<string, EquipmentVariantMeta> = {
@@ -166,8 +174,15 @@ export const VARIANT_REGISTRY: Record<string, EquipmentVariantMeta> = {
     animationStatus: 'verified',
     description: 'Banco horizontal onde o atleta deita de bruços e flexiona os calcanhares.',
     settingTips: 'Rolete posicionado 3 dedos acima do tendão de Aquiles.',
+    targetMuscle: 'Isquiotibiais (Posterior de Coxa)',
     primaryMuscles: ['Isquiotibiais'],
-    secondaryMuscles: ['Gastrocnêmio']
+    secondaryMuscles: ['Gastrocnêmio'],
+    activeBodyParts: {
+      front: [],
+      back: ['hamstrings']
+    },
+    reps: '12',
+    restSeconds: 50
   },
   'leg-4-seated': {
     variantId: 'leg-4-seated',
@@ -181,8 +196,15 @@ export const VARIANT_REGISTRY: Record<string, EquipmentVariantMeta> = {
     animationStatus: 'verified',
     description: 'Aparelho sentado com rolete descendo sob as panturrilhas.',
     settingTips: 'Aperte a trava sobre as coxas para impedir que o quadril levante.',
+    targetMuscle: 'Isquiotibiais (Encurtamento Sentado)',
     primaryMuscles: ['Isquiotibiais'],
-    secondaryMuscles: []
+    secondaryMuscles: ['Gastrocnêmio'],
+    activeBodyParts: {
+      front: [],
+      back: ['hamstrings']
+    },
+    reps: '12',
+    restSeconds: 50
   },
   'leg-4-stiff': {
     variantId: 'leg-4-stiff',
@@ -196,8 +218,15 @@ export const VARIANT_REGISTRY: Record<string, EquipmentVariantMeta> = {
     animationStatus: 'verified',
     description: 'Exercício livre com halteres descendo com quadril empurrado para trás.',
     settingTips: 'Mantenha a coluna reta e sinta o alongamento forte no posterior.',
+    targetMuscle: 'Isquiotibiais & Glúteo Máximo',
     primaryMuscles: ['Isquiotibiais', 'Glúteo Máximo'],
-    secondaryMuscles: ['Eretores da Espinha']
+    secondaryMuscles: ['Glúteo Máximo', 'Eretores da Espinha', 'Antebraço'],
+    activeBodyParts: {
+      front: [],
+      back: ['hamstrings', 'glutes', 'lowerback']
+    },
+    reps: '10 - 12',
+    restSeconds: 60
   },
 
   'leg-5-standing': {
@@ -461,8 +490,15 @@ export const VARIANT_REGISTRY: Record<string, EquipmentVariantMeta> = {
     animationStatus: 'verified',
     description: 'Corpo reto estático apoiado sobre antebraços e pontas dos pés.',
     settingTips: 'Puxe o umbigo para dentro e contraia os glúteos.',
+    targetMuscle: 'Reto Abdominal & Core Profundo',
     primaryMuscles: ['Reto Abdominal', 'Transverso do Abdômen'],
-    secondaryMuscles: ['Glúteos', 'Eretores da Espinha']
+    secondaryMuscles: ['Transverso abdominal', 'Lombar', 'Glúteos'],
+    activeBodyParts: {
+      front: ['abs'],
+      back: ['lowerback']
+    },
+    reps: '45s Prancha + 15 Infra',
+    restSeconds: 45
   },
   'back-6-ball': {
     variantId: 'back-6-ball',
@@ -476,8 +512,15 @@ export const VARIANT_REGISTRY: Record<string, EquipmentVariantMeta> = {
     animationStatus: 'verified',
     description: 'Apoio da região lombar sobre a curvatura da bola com pés firmes no chão.',
     settingTips: 'Deite com a lombar encaixada no centro da bola e contraia o abdômen ao subir.',
+    targetMuscle: 'Reto Abdominal (Isolamento Anterior)',
     primaryMuscles: ['Reto Abdominal'],
-    secondaryMuscles: ['Oblíquos', 'Estabilizadores do Core']
+    secondaryMuscles: ['Oblíquos', 'Transverso do Abdômen'],
+    activeBodyParts: {
+      front: ['abs'],
+      back: []
+    },
+    reps: '15 - 20',
+    restSeconds: 45
   },
 
   // ==========================================================================
@@ -713,8 +756,15 @@ export const VARIANT_REGISTRY: Record<string, EquipmentVariantMeta> = {
     animationStatus: 'verified',
     description: 'Posição afundo com peito do pé no banco e joelho dianteiro descendo a 90°.',
     settingTips: 'Dê um passo longo para frente para enfatizar o glúteo.',
+    targetMuscle: 'Glúteo Máximo & Quadríceps',
     primaryMuscles: ['Glúteo Máximo', 'Quadríceps'],
-    secondaryMuscles: ['Adutores']
+    secondaryMuscles: ['Adutores', 'Posterior de Coxa'],
+    activeBodyParts: {
+      front: ['quads'],
+      back: ['glutes']
+    },
+    reps: '10 cada perna',
+    restSeconds: 60
   },
   'glute-2-sumo': {
     variantId: 'glute-2-sumo',
@@ -728,8 +778,15 @@ export const VARIANT_REGISTRY: Record<string, EquipmentVariantMeta> = {
     animationStatus: 'verified',
     description: 'Pés afastados sobre dois steps permitindo amplitude profunda do halter.',
     settingTips: 'Joelhos apontam exatamente na direção da ponta dos pés.',
+    targetMuscle: 'Glúteo Máximo & Adutores da Coxa',
     primaryMuscles: ['Glúteo Máximo', 'Adutores da Coxa'],
-    secondaryMuscles: ['Quadríceps']
+    secondaryMuscles: ['Quadríceps', 'Isquiotibiais'],
+    activeBodyParts: {
+      front: ['quads'],
+      back: ['glutes']
+    },
+    reps: '12 - 15',
+    restSeconds: 60
   },
 
   'glute-3-machine': {

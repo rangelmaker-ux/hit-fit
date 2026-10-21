@@ -6,8 +6,15 @@ export interface ExerciseEquipmentVariant {
   equipmentType?: string;
   animationKey?: string;
   animationStatus?: 'verified' | 'in_preparation';
+  sets?: number;
   reps?: string;
   restSeconds?: number;
+  targetMuscle?: string;
+  secondaryMuscles?: string[];
+  activeBodyParts?: {
+    front: string[];
+    back: string[];
+  };
   biomechanics?: {
     setup: string;
     execution: string;
@@ -240,6 +247,14 @@ export const WORKOUT_DAYS: DayWorkout[] = [
             equipmentType: 'prone_leg_curl',
             animationKey: 'legcurlProne',
             animationStatus: 'verified',
+            targetMuscle: 'Isquiotibiais (Posterior de Coxa)',
+            secondaryMuscles: ['Panturrilhas'],
+            activeBodyParts: {
+              front: [],
+              back: ['hamstrings']
+            },
+            reps: '12',
+            restSeconds: 50,
             description: 'Aparelho deitado de barriga para baixo com rolete posterior no calcanhar.',
             settingTips: 'Ajuste a almofada 3 dedos acima do tendão de Aquiles.'
           },
@@ -250,6 +265,14 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               equipmentType: 'seated_leg_curl',
               animationKey: 'legcurlSeated',
               animationStatus: 'verified',
+              targetMuscle: 'Isquiotibiais (Encurtamento Sentado)',
+              secondaryMuscles: ['Gastrocnêmio'],
+              activeBodyParts: {
+                front: [],
+                back: ['hamstrings']
+              },
+              reps: '12',
+              restSeconds: 50,
               description: 'Aparelho sentado com trava sobre as coxas.'
             },
             {
@@ -258,6 +281,12 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               equipmentType: 'standing_dumbbells_stiff',
               animationKey: 'stiffDumbbell',
               animationStatus: 'verified',
+              targetMuscle: 'Isquiotibiais & Glúteo Máximo',
+              secondaryMuscles: ['Glúteo Máximo', 'Eretores da Espinha', 'Antebraço'],
+              activeBodyParts: {
+                front: [],
+                back: ['hamstrings', 'glutes', 'lowerback']
+              },
               reps: '10 - 12',
               restSeconds: 60,
               description: 'Exercício livre com halteres focando no alongamento posterior.',
@@ -616,6 +645,14 @@ export const WORKOUT_DAYS: DayWorkout[] = [
             equipmentType: 'isometric_floor_mat',
             animationKey: 'plankFloor',
             animationStatus: 'verified',
+            targetMuscle: 'Reto Abdominal & Core Profundo',
+            secondaryMuscles: ['Transverso abdominal', 'Lombar', 'Glúteos'],
+            activeBodyParts: {
+              front: ['abs'],
+              back: ['lowerback']
+            },
+            reps: '45s Prancha + 15 Infra',
+            restSeconds: 45,
             description: 'Superfície acolchoada no chão ou apoio de cotovelo na torre de abdominais.',
             settingTips: 'Certifique-se de que o colchonete apoia bem os antebraços.'
           },
@@ -626,6 +663,12 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               equipmentType: 'swiss_ball_core',
               animationKey: 'swissBallCrunch',
               animationStatus: 'verified',
+              targetMuscle: 'Reto Abdominal (Isolamento Anterior)',
+              secondaryMuscles: ['Oblíquos', 'Transverso do Abdômen'],
+              activeBodyParts: {
+                front: ['abs'],
+                back: []
+              },
               reps: '15 - 20',
               restSeconds: 45,
               description: 'Maior recrutamento de estabilidade e amplitude dinâmica do core.',
@@ -959,6 +1002,14 @@ export const WORKOUT_DAYS: DayWorkout[] = [
             equipmentType: 'bulgarian_split_bench',
             animationKey: 'bulgarianSplitSquat',
             animationStatus: 'verified',
+            targetMuscle: 'Glúteo Máximo & Quadríceps',
+            secondaryMuscles: ['Adutores', 'Posterior de Coxa'],
+            activeBodyParts: {
+              front: ['quads'],
+              back: ['glutes']
+            },
+            reps: '10 cada perna',
+            restSeconds: 60,
             description: 'Pé traseiro apoiado no banco e halteres nas mãos.',
             settingTips: 'Coloque um colchonete no chão para guiar o joelho de trás.'
           },
@@ -969,6 +1020,12 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               equipmentType: 'sumo_step_squat',
               animationKey: 'sumoSquatStep',
               animationStatus: 'verified',
+              targetMuscle: 'Glúteo Máximo & Adutores da Coxa',
+              secondaryMuscles: ['Quadríceps', 'Isquiotibiais'],
+              activeBodyParts: {
+                front: ['quads'],
+                back: ['glutes']
+              },
               reps: '12 - 15',
               restSeconds: 60,
               description: 'Pés bem afastados sobre dois steps, descendo o halter até o meio.',
