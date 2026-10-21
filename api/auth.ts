@@ -51,22 +51,6 @@ export default async function handler(req: Request) {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  // 1. Verificação estrita de segurança: exige HITFIT_AUTH_SECRET no ambiente do servidor (>= 32 chars)
-  if (!isAuthSecretConfigured()) {
-    return jsonResponse(500, {
-      error: 'A chave de segurança de autenticação (HITFIT_AUTH_SECRET) não está configurada no servidor ou possui menos de 32 caracteres. Configure HITFIT_AUTH_SECRET no painel da Vercel.',
-      code: 'AUTH_SECRET_NOT_CONFIGURED'
-    });
-  }
-
-  // 2. Proteção de persistência: em produção, falhar se o armazenamento persistente não estiver disponível
-  if (isProductionEnvironment() && !isCloudConfigured()) {
-    return jsonResponse(503, {
-      error: 'Armazenamento persistente (KV / Redis) não configurado no ambiente de produção.',
-      code: 'PERSISTENT_STORAGE_NOT_CONFIGURED'
-    });
-  }
-
   // ==========================================
   // GET: Obter sessão ativa ou status real das contas
   // ==========================================
@@ -74,6 +58,9 @@ export default async function handler(req: Request) {
     const authHeader = req.headers.get('authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
+      if (!isAuthSecretConfigured()) {
+        return jsonResponse(401, { error: 'Sessão inválida (chave de autenticação ausente).', valid: false });
+      }
       const session = await verifySessionToken(token);
       if (!session || (await isSessionRevoked(session.userId, session.iat))) {
         return jsonResponse(401, { error: 'Sessão inválida, expirada ou revogada.', valid: false });
@@ -109,8 +96,12 @@ export default async function handler(req: Request) {
     }
 
     // Consulta verídica às contas no Redis / KV
-    const userRangel = await getUserAccount('person-rangel');
-    const userJack = await getUserAccount('person-geicsania');
+    let userRangel: StoredUserAccount | null = null;
+    let userJack: StoredUserAccount | null = null;
+    if (isCloudConfigured()) {
+      userRangel = await getUserAccount('person-rangel');
+      userJack = await getUserAccount('person-geicsania');
+    }
     const hasRangel = Boolean(userRangel);
     const hasJack = Boolean(userJack);
     const isSetupNeeded = !hasRangel || !hasJack;
@@ -124,10 +115,24 @@ export default async function handler(req: Request) {
 
     const isAuthorizedAdmin = isAdminKeyConfigured() && verifyAdminKey(providedAdminKey);
 
+    const envAudit = {
+      isVercel: Boolean(process.env.VERCEL),
+      hasHitfitAuthSecret: Boolean(process.env.HITFIT_AUTH_SECRET && process.env.HITFIT_AUTH_SECRET.length >= 32),
+      hasKvRestApiUrl: Boolean(process.env.KV_REST_API_URL),
+      hasKvRestApiToken: Boolean(process.env.KV_REST_API_TOKEN),
+      hasUpstashUrl: Boolean(process.env.UPSTASH_REDIS_REST_URL),
+      hasUpstashToken: Boolean(process.env.UPSTASH_REDIS_REST_TOKEN),
+      hasHitfitAdminKey: Boolean(process.env.HITFIT_ADMIN_KEY),
+      hasAuthSecretConfigured: isAuthSecretConfigured(),
+      envKeyNames: Object.keys(process.env).filter(k => !k.includes('TOKEN') && !k.includes('SECRET') && !k.includes('KEY')).sort()
+    };
+
     return jsonResponse(200, {
       cloudConnected: isCloudConfigured(),
       isSetupNeeded,
       adminKeyConfigured: isAdminKeyConfigured(),
+      authSecretConfigured: isAuthSecretConfigured(),
+      envAudit,
       ...(isAuthorizedAdmin
         ? {
             audit: {
@@ -171,6 +176,22 @@ export default async function handler(req: Request) {
 
   if (req.method !== 'POST') {
     return jsonResponse(405, { error: 'Método não permitido.' });
+  }
+
+  // 1. Verificação de segredo para operações de mutação/autenticação
+  if (!isAuthSecretConfigured()) {
+    return jsonResponse(500, {
+      error: 'A chave de segurança de autenticação (HITFIT_AUTH_SECRET) não está configurada no servidor ou possui menos de 32 caracteres. Configure HITFIT_AUTH_SECRET no painel da Vercel.',
+      code: 'AUTH_SECRET_NOT_CONFIGURED'
+    });
+  }
+
+  // 2. Proteção de persistência: em produção, falhar se o armazenamento persistente não estiver disponível
+  if (isProductionEnvironment() && !isCloudConfigured()) {
+    return jsonResponse(503, {
+      error: 'Armazenamento persistente (KV / Redis) não configurado no ambiente de produção.',
+      code: 'PERSISTENT_STORAGE_NOT_CONFIGURED'
+    });
   }
 
   let body: Record<string, unknown> = {};
