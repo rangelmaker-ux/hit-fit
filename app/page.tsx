@@ -21,7 +21,11 @@ import {
   getStoredUser,
   checkSession,
   logoutAthlete,
-  pushSyncData
+  pushSyncData,
+  pullSyncData,
+  subscribeSyncStatus,
+  getSyncStatus,
+  SyncStatusType
 } from '@/lib/auth-client';
 import {
   getUnifiedBiometrics,
@@ -29,14 +33,15 @@ import {
   BIOMETRICS_EVENT,
   UnifiedBiometrics
 } from '@/lib/biometrics';
-import { Dumbbell, Shield, LogOut, Watch, Lock } from 'lucide-react';
+import { Dumbbell, Shield, LogOut, Watch, Lock, Cloud } from 'lucide-react';
 import {
   SavedSetState,
   swapExerciseVariant,
   applyStoredVariantsToWorkouts,
   getStoredVariantsForProfile,
   saveStoredVariantsForProfile,
-  recordSetWithVariant
+  recordSetWithVariant,
+  getIsoWeekKey
 } from '@/lib/workout-variants';
 
 const PEOPLE_CONFIG = [
@@ -48,13 +53,6 @@ function getInitialDayIndex(): number {
   if (typeof window === 'undefined') return 0;
   const today = new Date();
   return Math.min(4, Math.max(0, today.getDay() === 0 ? 0 : today.getDay() - 1));
-}
-
-function getInitialWeek(): string {
-  const today = new Date();
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-  return `${startOfWeek.getFullYear()}-W${Math.ceil(startOfWeek.getDate() / 7)}`;
 }
 
 export default function Home() {
@@ -109,8 +107,34 @@ export default function Home() {
     }
     return {};
   });
-  const [currentWeek] = useState<string>(getInitialWeek);
+  const [currentWeek, setCurrentWeek] = useState<string>(() => getIsoWeekKey(new Date()));
   const [avatars, setAvatars] = useState<Record<string, string | null>>({});
+  const [syncStatus, setSyncStatus] = useState<SyncStatusType>(getSyncStatus);
+
+  // Assina mudanças de status de sincronização em nuvem
+  useEffect(() => {
+    return subscribeSyncStatus((status) => {
+      setSyncStatus(status);
+    });
+  }, []);
+
+  // Monitora virada de semana ISO-8601 em tempo real com o app aberto
+  useEffect(() => {
+    const checkWeekRollover = () => {
+      const nowWeek = getIsoWeekKey(new Date());
+      setCurrentWeek((prev) => (prev !== nowWeek ? nowWeek : prev));
+    };
+
+    const interval = setInterval(checkWeekRollover, 60000);
+    window.addEventListener('focus', checkWeekRollover);
+    document.addEventListener('visibilitychange', checkWeekRollover);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkWeekRollover);
+      document.removeEventListener('visibilitychange', checkWeekRollover);
+    };
+  }, []);
 
   // Cronômetros e Telemetria de Treino
   const [workoutActive, setWorkoutActive] = useState(false);
@@ -136,7 +160,77 @@ export default function Home() {
   const [bleConnected, setBleConnected] = useState(false);
   const [bleDeviceName, setBleDeviceName] = useState<string | null>(null);
 
-  // Checagem de Sessão Real no Backend
+  // Reconciliação com a nuvem durável (Pull dos dados do atleta + parceiro)
+  const reconcileRemoteData = useCallback(async (user: AuthenticatedUser) => {
+    try {
+      const partnerPerson = PEOPLE_CONFIG.find((p) => p.id !== user.id);
+      const res = await pullSyncData(partnerPerson?.id);
+      if (!res) return;
+
+      const { athlete, partner } = res;
+
+      // 1. Reconcilia variantes ativas do atleta autenticado
+      if (athlete?.selectedVariants && typeof athlete.selectedVariants === 'object') {
+        setProfileVariants((prev) => {
+          const currentAthlete = prev[user.id] || {};
+          const merged = { ...currentAthlete, ...athlete.selectedVariants };
+          saveStoredVariantsForProfile(user.id, merged);
+          return { ...prev, [user.id]: merged };
+        });
+      }
+
+      // 2. Reconcilia variantes do parceiro (leitura)
+      if (partner?.selectedVariants && typeof partner.selectedVariants === 'object' && partnerPerson) {
+        setProfileVariants((prev) => {
+          const currentPartner = prev[partnerPerson.id] || {};
+          const merged = { ...currentPartner, ...partner.selectedVariants };
+          saveStoredVariantsForProfile(partnerPerson.id, merged);
+          return { ...prev, [partnerPerson.id]: merged };
+        });
+      }
+
+      // 3. Reconcilia séries de treino (savedSets)
+      // PROTEÇÃO: Nunca permitir que cache local vazio sobrescreva dados remotos preenchidos!
+      setSavedSets((prev) => {
+        const merged: Record<string, SavedSetState> = { ...prev };
+        let hasChanges = false;
+
+        const mergeRecord = (remoteSets?: Record<string, SavedSetState>) => {
+          if (!remoteSets || typeof remoteSets !== 'object') return;
+          for (const [key, remoteVal] of Object.entries(remoteSets)) {
+            const localVal = merged[key];
+            if (!localVal) {
+              merged[key] = remoteVal;
+              hasChanges = true;
+            } else {
+              const remoteTime = remoteVal.completedAt ? new Date(remoteVal.completedAt).getTime() : 0;
+              const localTime = localVal.completedAt ? new Date(localVal.completedAt).getTime() : 0;
+              if (remoteVal.done && !localVal.done) {
+                merged[key] = remoteVal;
+                hasChanges = true;
+              } else if (remoteTime > localTime) {
+                merged[key] = remoteVal;
+                hasChanges = true;
+              }
+            }
+          }
+        };
+
+        if (athlete?.savedSets) mergeRecord(athlete.savedSets as Record<string, SavedSetState>);
+        if (partner?.savedSets) mergeRecord(partner.savedSets as Record<string, SavedSetState>);
+
+        if (hasChanges) {
+          try {
+            localStorage.setItem('hitfit-progress-v2', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        }
+        return prev;
+      });
+    } catch {}
+  }, []);
+
+  // Checagem de Sessão Real no Backend + Hidratação Remota
   useEffect(() => {
     if (!isClient) return;
     checkSession()
@@ -144,12 +238,13 @@ export default function Home() {
         if (user) {
           setCurrentUser(user);
           setActiveProfile(user.id);
+          reconcileRemoteData(user);
         }
       })
       .finally(() => {
         setAuthChecking(false);
       });
-  }, [isClient]);
+  }, [isClient, reconcileRemoteData]);
 
   // Carrega avatares do IndexedDB
   const refreshAvatars = useCallback(() => {
@@ -221,7 +316,7 @@ export default function Home() {
   }, []);
 
   const toggleSet = (exerciseId: string, setIdx: number) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !currentUser) return;
     const key = getSetKey(dayIndex, exerciseId, setIdx);
     const ex = todayWorkout.exercises.find((e) => e.id === exerciseId);
     if (!ex) return;
@@ -232,17 +327,29 @@ export default function Home() {
       const updatedItem = recordSetWithVariant(current, ex, nextDone);
       const updated = { ...prev, [key]: updatedItem };
       
-      // Sincroniza com a nuvem
-      if (currentUser) {
-        pushSyncData({ userId: currentUser.id, savedSets: updated });
+      // SEGURANÇA RBAC: Sincroniza com a nuvem enviando apenas as séries do atleta autenticado
+      const userSetsOnly: Record<string, SavedSetState> = {};
+      for (const [k, v] of Object.entries(updated)) {
+        const parts = k.split(':');
+        if (parts.length >= 2 && parts[1] === currentUser.id) {
+          userSetsOnly[k] = v;
+        }
       }
+      pushSyncData({ userId: currentUser.id, savedSets: userSetsOnly });
+
       return updated;
     });
-    startRest(60);
+
+    const currentItem = savedSets[key];
+    const willBeDone = !(currentItem?.done);
+    if (willBeDone) {
+      // Conecta o cronômetro exatamente à prescrição ativa do exercício ou variante
+      startRest(ex.restSeconds || 60);
+    }
   };
 
   const updateSetWeight = (exerciseId: string, setIdx: number, weightKg: string) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !currentUser) return;
     const key = getSetKey(dayIndex, exerciseId, setIdx);
     const ex = todayWorkout.exercises.find((e) => e.id === exerciseId);
     if (!ex) return;
@@ -251,15 +358,23 @@ export default function Home() {
       const current = prev[key];
       const updatedItem = recordSetWithVariant(current, ex, current?.done ?? false, weightKg);
       const updated = { ...prev, [key]: updatedItem };
-      if (currentUser) {
-        pushSyncData({ userId: currentUser.id, savedSets: updated });
+
+      // Sincroniza rascunho de carga na nuvem apenas para o atleta autenticado
+      const userSetsOnly: Record<string, SavedSetState> = {};
+      for (const [k, v] of Object.entries(updated)) {
+        const parts = k.split(':');
+        if (parts.length >= 2 && parts[1] === currentUser.id) {
+          userSetsOnly[k] = v;
+        }
       }
+      pushSyncData({ userId: currentUser.id, savedSets: userSetsOnly });
+
       return updated;
     });
   };
 
   const handleSwapExercise = (targetIdentifier: string) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !currentUser) return;
     if (!selectedExercise) return;
     const targetEx = selectedExercise;
     const updatedExercise = swapExerciseVariant(targetEx, targetIdentifier);
@@ -274,6 +389,13 @@ export default function Home() {
         [targetEx.id]: updatedExercise.activeVariantId
       };
       saveStoredVariantsForProfile(activeProfile, updated);
+
+      // Sincroniza a variante selecionada com a nuvem permanente
+      pushSyncData({
+        userId: currentUser.id,
+        selectedVariants: updated
+      });
+
       return {
         ...prev,
         [activeProfile]: updated
@@ -446,8 +568,28 @@ export default function Home() {
                 <span className="text-xs font-black tracking-tight text-white block">
                   HIT-FIT DUO PRO
                 </span>
-                <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 font-bold border border-emerald-500/30">
-                  ONLINE
+                <span
+                  className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full border flex items-center gap-1 transition-colors ${
+                    syncStatus === 'synced'
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      : syncStatus === 'syncing'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 animate-pulse'
+                      : syncStatus === 'error'
+                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                      : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                  }`}
+                  title={
+                    syncStatus === 'synced'
+                      ? 'Nuvem sincronizada com sucesso'
+                      : syncStatus === 'syncing'
+                      ? 'Sincronizando com banco permanente...'
+                      : syncStatus === 'error'
+                      ? 'Erro de sincronização. Fila ativa para retry.'
+                      : 'Modo offline'
+                  }
+                >
+                  <Cloud size={10} />
+                  {syncStatus === 'synced' ? 'NUVEM' : syncStatus === 'syncing' ? 'SYNC...' : syncStatus === 'error' ? 'RETRY' : 'OFFLINE'}
                 </span>
               </div>
               <span className="text-[10px] font-mono text-neutral-400 flex items-center gap-1">

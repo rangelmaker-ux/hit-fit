@@ -15,7 +15,12 @@ export function MuscleMap({
   accentColor = '#c3f75a',
   viewMode = 'both'
 }: MuscleMapProps) {
-  const isFrontActive = (part: string) => activeFrontParts.includes(part);
+  const isFrontActive = (part: string) => {
+    if (part === 'adductors' || part === 'adutores') {
+      return activeFrontParts.includes('adductors') || activeFrontParts.includes('adutores');
+    }
+    return activeFrontParts.includes(part);
+  };
   const isBackActive = (part: string) => {
     if (part === 'traps') {
       return activeBackParts.includes('traps') || activeBackParts.includes('midback');
@@ -161,6 +166,24 @@ export function MuscleMap({
                 stroke={isFrontActive('quads') ? '#fff' : strokeColor}
                 strokeWidth="1.2"
                 filter={isFrontActive('quads') ? 'url(#glow-front)' : undefined}
+                className="transition-colors duration-300"
+              />
+
+              {/* Adutores da Coxa (Medial / Interno) */}
+              <path
+                d="M44 106 C46 115 47 128 44 141 C42 140 41 125 41 106 Z"
+                fill={isFrontActive('adductors') ? activeFill : defaultFill}
+                stroke={isFrontActive('adductors') ? '#fff' : strokeColor}
+                strokeWidth="1.2"
+                filter={isFrontActive('adductors') ? 'url(#glow-front)' : undefined}
+                className="transition-colors duration-300"
+              />
+              <path
+                d="M56 106 C54 115 53 128 56 141 C58 140 59 125 59 106 Z"
+                fill={isFrontActive('adductors') ? activeFill : defaultFill}
+                stroke={isFrontActive('adductors') ? '#fff' : strokeColor}
+                strokeWidth="1.2"
+                filter={isFrontActive('adductors') ? 'url(#glow-front)' : undefined}
                 className="transition-colors duration-300"
               />
 

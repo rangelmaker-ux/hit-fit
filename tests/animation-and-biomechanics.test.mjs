@@ -726,7 +726,7 @@ test('8. Conformidade Anatômica: handleSwapExercise atualiza targetMuscle, seco
   assert.equal(glute2Sumo.targetMuscle, 'Glúteo Máximo & Adutores da Coxa');
   assert.ok(glute2Sumo.secondaryMuscles.includes('Quadríceps'));
   assert.ok(glute2Sumo.secondaryMuscles.includes('Isquiotibiais'));
-  assert.deepEqual(glute2Sumo.activeBodyParts.front, ['quads']);
+  assert.deepEqual(glute2Sumo.activeBodyParts.front, ['quads', 'adductors']);
   assert.deepEqual(glute2Sumo.activeBodyParts.back, ['glutes']);
   assert.equal(glute2Sumo.reps, '12 - 15');
 });
@@ -758,25 +758,34 @@ test('9. Histórico por Série: Troca no meio do treino preserva a máquina das 
   const set2 = recordSetWithVariant(undefined, leg4Swapped, true, '36');
   assert.equal(set2.done, true);
   assert.equal(set2.variantId, 'leg-4-stiff');
-  assert.equal(set2.equipmentName, 'Stiff com Halteres');
+  assert.ok(set2.equipmentName.includes('Halteres'));
+  assert.equal(set2.exerciseName, 'Stiff com Halteres');
   assert.equal(set2.weightKg, '36');
 
   const set3 = recordSetWithVariant(undefined, leg4Swapped, true, '36');
   assert.equal(set3.done, true);
   assert.equal(set3.variantId, 'leg-4-stiff');
-  assert.equal(set3.equipmentName, 'Stiff com Halteres');
+  assert.ok(set3.equipmentName.includes('Halteres'));
+  assert.equal(set3.exerciseName, 'Stiff com Halteres');
+  assert.equal(set3.weightKg, '36');
 
   // REGRA INVIOLÁVEL: As séries 0 e 1 continuam intactas na Mesa Flexora
   assert.equal(set0.variantId, 'leg-4-prone');
   assert.equal(set1.variantId, 'leg-4-prone');
   assert.notEqual(set0.variantId, leg4Swapped.activeVariantId);
 
-  // Retrocompatibilidade: séries legadas sem variantId continuam operacionais
+  // Retrocompatibilidade e desacoplamento: desmarcar série preserva a carga mas libera a máquina
   const legacySet = { done: true, weightKg: '50' };
   const updatedLegacy = recordSetWithVariant(legacySet, leg4Swapped, false);
   assert.equal(updatedLegacy.done, false);
   assert.equal(updatedLegacy.weightKg, '50');
-  assert.equal(updatedLegacy.variantId, 'leg-4-stiff');
+  assert.equal(updatedLegacy.variantId, undefined); // Snapshot liberado para que outra máquina possa ser escolhida
+
+  // Ao marcar como concluída (done: true), captura atomicamente a máquina ativa
+  const completedLegacy = recordSetWithVariant(updatedLegacy, leg4Swapped, true);
+  assert.equal(completedLegacy.done, true);
+  assert.equal(completedLegacy.weightKg, '50');
+  assert.equal(completedLegacy.variantId, 'leg-4-stiff');
 });
 
 // ============================================================================

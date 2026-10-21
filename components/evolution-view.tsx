@@ -34,51 +34,74 @@ export function EvolutionView({
   savedSets,
   accentColor = '#c3f75a'
 }: EvolutionViewProps) {
-  // Lista exercícios com cargas registradas para este perfil
-  const exerciseHistory: {
+  // Identifica unidade de carga anatômica/biomecânica
+  const getUnitLabel = (equipment: string, variantId?: string): string => {
+    const text = `${equipment} ${variantId || ''}`.toLowerCase();
+    if (text.includes('halter') || text.includes('dumbbells') || text.includes('dumbbell')) {
+      return 'kg (cada halter)';
+    }
+    if (text.includes('polia') || text.includes('cable') || text.includes('placa')) {
+      return 'placas / kg (polia)';
+    }
+    if (text.includes('smith') || text.includes('barra') || text.includes('articulad') || text.includes('leg press')) {
+      return 'kg total';
+    }
+    return 'kg';
+  };
+
+  interface GroupedVariantRecord {
+    groupKey: string;
     dayName: string;
     exerciseName: string;
+    equipmentName: string;
     targetMuscle: string;
+    unitLabel: string;
     maxWeight: number;
     completedSetsCount: number;
     recommendedNextWeight: number;
-    equipmentsUsed?: string[];
-  }[] = [];
+  }
+
+  const historyMap = new Map<string, GroupedVariantRecord>();
 
   WORKOUT_DAYS.forEach((day, dIdx) => {
     day.exercises.forEach((ex) => {
-      let maxW = 0;
-      let completedCount = 0;
-      const equipmentsSet = new Set<string>();
-
       for (let s = 0; s < ex.sets; s++) {
         const key = `${currentWeek}:${profileId}:${dIdx}:${ex.id}:${s}`;
         const item = savedSets[key];
         if (item?.done) {
-          completedCount++;
           const w = parseFloat(item.weightKg || '0');
-          if (w > maxW) maxW = w;
-          if (item.equipmentName) {
-            equipmentsSet.add(item.equipmentName);
+          const variantId = item.variantId || ex.activeVariantId || 'default';
+          const groupKey = `${ex.id}::${variantId}`;
+          const exName = item.exerciseName || ex.name;
+          const eqName = item.equipmentName || ex.machines.primary.name;
+          const unit = getUnitLabel(eqName, variantId);
+
+          const existing = historyMap.get(groupKey);
+          if (!existing) {
+            historyMap.set(groupKey, {
+              groupKey,
+              dayName: day.dayName,
+              exerciseName: exName,
+              equipmentName: eqName,
+              targetMuscle: ex.targetMuscle,
+              unitLabel: unit,
+              maxWeight: w,
+              completedSetsCount: 1,
+              recommendedNextWeight: w > 0 ? w + 2 : 0
+            });
+          } else {
+            existing.completedSetsCount++;
+            if (w > existing.maxWeight) {
+              existing.maxWeight = w;
+              existing.recommendedNextWeight = w + 2;
+            }
           }
         }
       }
-
-      if (maxW > 0 || completedCount > 0) {
-        // Sugestão conservadora: +1 a 2 kg se completou todas as séries
-        const nextW = completedCount >= ex.sets && maxW > 0 ? maxW + 2 : maxW;
-        exerciseHistory.push({
-          dayName: day.dayName,
-          exerciseName: ex.name,
-          targetMuscle: ex.targetMuscle,
-          maxWeight: maxW,
-          completedSetsCount: completedCount,
-          recommendedNextWeight: nextW,
-          equipmentsUsed: Array.from(equipmentsSet)
-        });
-      }
     });
   });
+
+  const exerciseHistory = Array.from(historyMap.values());
 
   return (
     <div className="flex flex-col gap-5 text-neutral-100 pb-20 animate-in fade-in duration-300">
@@ -166,21 +189,19 @@ export function EvolutionView({
                     </span>
                   </div>
                   <h4 className="text-sm font-bold text-white">{item.exerciseName}</h4>
-                  {item.equipmentsUsed && item.equipmentsUsed.length > 0 && (
-                    <div className="flex flex-wrap gap-1 my-1">
-                      {item.equipmentsUsed.map((eq, i) => (
-                        <span 
-                          key={i} 
-                          className="text-[9px] font-medium px-2 py-0.5 rounded-md border border-white/10"
-                          style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
-                        >
-                          {eq}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex flex-wrap items-center gap-1.5 my-1">
+                    <span 
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-md border border-white/10"
+                      style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
+                    >
+                      {item.equipmentName}
+                    </span>
+                    <span className="text-[10px] text-neutral-400 font-mono">
+                      ({item.unitLabel})
+                    </span>
+                  </div>
                   <span className="text-[11px] text-neutral-400">
-                    {item.completedSetsCount} séries registradas
+                    {item.completedSetsCount} {item.completedSetsCount === 1 ? 'série registrada' : 'séries registradas'}
                   </span>
                 </div>
 
@@ -193,6 +214,9 @@ export function EvolutionView({
                       Meta: {item.recommendedNextWeight} kg <ArrowUpRight size={11} />
                     </span>
                   )}
+                  <span className="text-[9px] text-neutral-500 font-medium">
+                    {item.unitLabel}
+                  </span>
                 </div>
               </div>
             ))}

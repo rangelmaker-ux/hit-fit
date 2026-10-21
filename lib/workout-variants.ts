@@ -47,6 +47,8 @@ export function swapExerciseVariant(
     ...exercise.machines.primary,
     variantId: exercise.activeVariantId || exercise.machines.primary.variantId,
     name: exercise.machines.primary.name,
+    equipmentName: exercise.machines.primary.equipmentName || exercise.machines.primary.name,
+    exerciseName: exercise.name, // Preserva identidade imutável do exercício
     animationKey: exercise.animationKey,
     sets: exercise.sets,
     reps: exercise.reps,
@@ -70,7 +72,23 @@ export function swapExerciseVariant(
 
   const newAnimationKey =
     altItem.animationKey || registryItem?.animationKey || exercise.animationKey;
-  const newName = altItem.name || registryItem?.exerciseName || exercise.name;
+
+  // Segregação estrita entre Nome do Exercício e Nome do Equipamento
+  const newExerciseName =
+    altItem.exerciseName ||
+    registryItem?.exerciseName ||
+    (altItem.name &&
+    !altItem.name.toLowerCase().includes('banco') &&
+    !altItem.name.toLowerCase().includes('máquina articulada') &&
+    !altItem.name.toLowerCase().includes('smith')
+      ? altItem.name
+      : exercise.name);
+
+  const newEquipmentName =
+    altItem.equipmentName ||
+    registryItem?.equipmentName ||
+    altItem.name ||
+    exercise.machines.primary.name;
 
   const targetMuscle =
     altItem.targetMuscle ||
@@ -106,7 +124,9 @@ export function swapExerciseVariant(
   const newPrimary: ExerciseEquipmentVariant = {
     ...altItem,
     variantId: newVariantId,
-    name: newName,
+    name: newEquipmentName,
+    equipmentName: newEquipmentName,
+    exerciseName: newExerciseName,
     description:
       altItem.description || registryItem?.description || exercise.machines.primary.description,
     settingTips:
@@ -124,7 +144,7 @@ export function swapExerciseVariant(
 
   return {
     ...exercise,
-    name: newName,
+    name: newExerciseName,
     activeVariantId: newVariantId,
     animationKey: newAnimationKey,
     targetMuscle,
@@ -194,8 +214,11 @@ export function saveStoredVariantsForProfile(
 }
 
 /**
- * Cria ou atualiza um snapshot de série concluída, registrando variantId, equipamento,
- * nome do exercício e reps ativos no exato momento da execução.
+ * Cria ou atualiza um snapshot de série com desacoplamento rigoroso:
+ * - Se done === false: armazena somente o rascunho de carga (weightKg) sem congelar variantId ou equipamento.
+ * - Se done === true: captura atomicamente a variante, equipamento e exercício ativos no momento da conclusão.
+ * - Se desmarcada (done === false): preserva o peso digitado, mas limpa o snapshot de conclusão para que nova máquina possa ser escolhida.
+ * - Não inventa variantes fictícias para registros legados que não as possuam.
  */
 export function recordSetWithVariant(
   current: SavedSetState | undefined,
@@ -203,15 +226,56 @@ export function recordSetWithVariant(
   done: boolean,
   weightKg?: string
 ): SavedSetState {
-  const isDone = done;
+  const resolvedWeight = weightKg !== undefined ? weightKg : current?.weightKg;
+
+  if (!done) {
+    return {
+      done: false,
+      weightKg: resolvedWeight
+    };
+  }
+
+  // Série CONCLUÍDA (done: true)
+  const primary = exercise.machines.primary;
+  const activeVariantId = exercise.activeVariantId || primary.variantId;
+  const activeEquipmentName = primary.equipmentName || primary.name || exercise.name;
+  const activeExerciseName = exercise.name;
+  const activeReps = primary.reps || exercise.reps;
+
   return {
-    ...(current || {}),
-    done: isDone,
-    weightKg: weightKg !== undefined ? weightKg : current?.weightKg,
-    variantId: current?.variantId || exercise.activeVariantId || exercise.machines.primary.variantId,
-    equipmentName: current?.equipmentName || exercise.machines.primary.name,
-    exerciseName: current?.exerciseName || exercise.name,
-    reps: current?.reps || exercise.reps,
-    completedAt: isDone ? (current?.completedAt || new Date().toISOString()) : current?.completedAt
+    done: true,
+    weightKg: resolvedWeight,
+    variantId: activeVariantId,
+    equipmentName: activeEquipmentName,
+    exerciseName: activeExerciseName,
+    reps: activeReps,
+    completedAt: current?.completedAt || new Date().toISOString()
   };
+}
+
+/**
+ * Calcula a chave canônica de semana ISO-8601 (YYYY-Www).
+ * Segue estritamente a especificação ISO: a semana começa na segunda-feira e a primeira semana
+ * do ano é aquela que contém a primeira quinta-feira de janeiro (pelo menos 4 dias no ano novo).
+ * Elimina colisões de dias de meses diferentes que o método antigo (dia/7) provocava.
+ */
+export function getIsoWeekKey(dateInput: Date | string | number = new Date()): string {
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) {
+    return getIsoWeekKey(new Date());
+  }
+
+  // Cria cópia em meio-dia UTC para eliminar distorções de fuso horário / DST
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0));
+  // ISO-8601: Segunda-feira = 1, Domingo = 7
+  const dayNr = ((target.getUTCDay() + 6) % 7) + 1;
+  // Ajusta a data para a quinta-feira da mesma semana
+  target.setUTCDate(target.getUTCDate() - dayNr + 4);
+  const isoYear = target.getUTCFullYear();
+  // 1º de Janeiro do ano ISO
+  const firstJan = new Date(Date.UTC(isoYear, 0, 1, 12, 0, 0));
+  const dayDifference = Math.floor((target.getTime() - firstJan.getTime()) / 86400000);
+  const weekNumber = 1 + Math.floor(dayDifference / 7);
+
+  return `${isoYear}-W${String(weekNumber).padStart(2, '0')}`;
 }

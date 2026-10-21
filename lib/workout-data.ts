@@ -1,6 +1,8 @@
 export interface ExerciseEquipmentVariant {
   variantId?: string;
   name: string;
+  equipmentName?: string;
+  exerciseName?: string;
   description: string;
   settingTips?: string;
   equipmentType?: string;
@@ -727,6 +729,8 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Banco Regulável a 75° ou 80°',
+            exerciseName: 'Desenvolvimento com Halteres no Banco',
+            equipmentName: 'Banco Regulável a 75°/80° + Halteres Livres',
             variantId: 'sh-1-dumbbells',
             equipmentType: 'incline_bench_dumbbells',
             animationKey: 'shoulderPressDumbbell',
@@ -737,6 +741,8 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           alternatives: [
             {
               name: 'Desenvolvimento em Máquina Articulada',
+              exerciseName: 'Desenvolvimento em Máquina Articulada',
+              equipmentName: 'Máquina Articulada de Desenvolvimento de Ombros',
               variantId: 'sh-1-machine',
               equipmentType: 'articulated_shoulder_press',
               animationKey: 'shoulderPressMachine',
@@ -745,6 +751,8 @@ export const WORKOUT_DAYS: DayWorkout[] = [
             },
             {
               name: 'Desenvolvimento na Barra Guiada (Smith)',
+              exerciseName: 'Desenvolvimento na Barra Guiada (Smith)',
+              equipmentName: 'Smith Machine com Banco 80°',
               variantId: 'sh-1-smith',
               equipmentType: 'smith_shoulder_press',
               animationKey: 'shoulderPressSmith',
@@ -998,6 +1006,8 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Banco Reto ou Step + Halteres',
+            exerciseName: 'Agachamento Búlgaro',
+            equipmentName: 'Banco Reto ou Step + Halteres',
             variantId: 'glute-2-bulgarian',
             equipmentType: 'bulgarian_split_bench',
             animationKey: 'bulgarianSplitSquat',
@@ -1016,6 +1026,8 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           alternatives: [
             {
               name: 'Agachamento Sumô no Step com Halter',
+              exerciseName: 'Agachamento Sumô no Step com Halter',
+              equipmentName: 'Steps Paralelos + Halter Central Pesado',
               variantId: 'glute-2-sumo',
               equipmentType: 'sumo_step_squat',
               animationKey: 'sumoSquatStep',
@@ -1023,7 +1035,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
               targetMuscle: 'Glúteo Máximo & Adutores da Coxa',
               secondaryMuscles: ['Quadríceps', 'Isquiotibiais'],
               activeBodyParts: {
-                front: ['quads'],
+                front: ['quads', 'adductors'],
                 back: ['glutes']
               },
               reps: '12 - 15',

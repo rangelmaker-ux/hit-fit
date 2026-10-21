@@ -23,6 +23,16 @@ export interface StoredUserAccount {
   updatedAt: string;
 }
 
+export interface CloudSavedSetState {
+  done: boolean;
+  weightKg?: string;
+  variantId?: string;
+  equipmentName?: string;
+  exerciseName?: string;
+  reps?: string;
+  completedAt?: string;
+}
+
 export interface StoredAthleteData {
   userId: string;
   avatarBase64?: string | null;
@@ -37,7 +47,8 @@ export interface StoredAthleteData {
   };
   waterLogs: Record<string, number>; // date -> ml
   nutritionDays: Record<string, unknown>;
-  savedSets: Record<string, { done: boolean; weightKg?: string }>;
+  savedSets: Record<string, CloudSavedSetState>;
+  selectedVariants?: Record<string, string>; // exerciseId -> variantId
   workoutHistory: Array<{
     id: string;
     date: string;

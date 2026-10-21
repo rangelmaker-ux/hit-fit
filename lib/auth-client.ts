@@ -269,12 +269,57 @@ export async function checkSession(): Promise<AuthenticatedUser | null> {
   }
 }
 
-/**
- * Sincroniza dados com a nuvem (Push) com verificação de autorização
- */
-export async function pushSyncData(payload: Record<string, unknown>): Promise<boolean> {
+export type SyncStatusType = 'synced' | 'syncing' | 'offline' | 'error';
+
+type SyncStatusListener = (status: SyncStatusType) => void;
+const syncStatusListeners = new Set<SyncStatusListener>();
+let currentSyncStatus: SyncStatusType = 'synced';
+
+export function getSyncStatus(): SyncStatusType {
+  return currentSyncStatus;
+}
+
+export function subscribeSyncStatus(listener: SyncStatusListener): () => void {
+  syncStatusListeners.add(listener);
+  listener(currentSyncStatus);
+  return () => {
+    syncStatusListeners.delete(listener);
+  };
+}
+
+function notifySyncStatus(status: SyncStatusType) {
+  currentSyncStatus = status;
+  syncStatusListeners.forEach((fn) => {
+    try {
+      fn(status);
+    } catch {}
+  });
+}
+
+// Fila resiliente de sincronização em segundo plano (evita concorrência e perda de dados offline)
+let isSyncProcessing = false;
+let pendingSyncPayload: Record<string, unknown> | null = null;
+let syncRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function processSyncQueue(): Promise<void> {
+  if (isSyncProcessing) return;
+  if (!pendingSyncPayload) {
+    notifySyncStatus('synced');
+    return;
+  }
+
   const token = getStoredToken();
-  if (!token) return false;
+  if (!token) {
+    pendingSyncPayload = null;
+    notifySyncStatus('offline');
+    return;
+  }
+
+  isSyncProcessing = true;
+  notifySyncStatus('syncing');
+
+  const payloadToSend = { ...pendingSyncPayload };
+  pendingSyncPayload = null;
 
   try {
     const res = await fetch('/api/sync', {
@@ -283,21 +328,105 @@ export async function pushSyncData(payload: Record<string, unknown>): Promise<bo
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payloadToSend)
     });
 
-    return res.ok;
+    if (res.ok) {
+      notifySyncStatus('synced');
+      isSyncProcessing = false;
+      if (pendingSyncPayload) {
+        processSyncQueue();
+      }
+    } else {
+      // Falha do servidor (4xx / 5xx)
+      if (res.status === 401) {
+        notifySyncStatus('offline');
+      } else {
+        notifySyncStatus('error');
+      }
+      isSyncProcessing = false;
+      // Reenfileira para retry se não houver um novo payload sobrescrevendo
+      if (!pendingSyncPayload) {
+        pendingSyncPayload = payloadToSend;
+        if (!syncRetryTimer) {
+          syncRetryTimer = setTimeout(() => {
+            syncRetryTimer = null;
+            processSyncQueue();
+          }, 4000);
+        }
+      }
+    }
   } catch {
+    // Falha de rede (offline)
+    notifySyncStatus('offline');
+    isSyncProcessing = false;
+    if (!pendingSyncPayload) {
+      pendingSyncPayload = payloadToSend;
+      if (!syncRetryTimer) {
+        syncRetryTimer = setTimeout(() => {
+          syncRetryTimer = null;
+          processSyncQueue();
+        }, 5000);
+      }
+    }
+  }
+}
+
+/**
+ * Sincroniza dados com a nuvem (Push) com verificação de autorização e fila resiliente
+ */
+export async function pushSyncData(payload: Record<string, unknown>): Promise<boolean> {
+  const token = getStoredToken();
+  if (!token) {
+    notifySyncStatus('offline');
     return false;
   }
+
+  // Agrega payload pendente com o novo para não perder campos parciais
+  pendingSyncPayload = {
+    ...(pendingSyncPayload || {}),
+    ...payload
+  };
+
+  processSyncQueue();
+  return true;
+}
+
+export interface CloudAthletePayload {
+  userId: string;
+  avatarBase64?: string | null;
+  currentWeightKg: number | null;
+  weightHistory?: Array<{ id: string; date: string; weightKg: number; notes?: string }>;
+  weightGoal?: {
+    initialKg: number | null;
+    currentKg: number | null;
+    targetKg: number | null;
+    objective: string;
+    updatedAt: string;
+  };
+  waterLogs?: Record<string, number>;
+  nutritionDays?: Record<string, unknown>;
+  savedSets?: Record<string, {
+    done: boolean;
+    weightKg?: string;
+    variantId?: string;
+    equipmentName?: string;
+    exerciseName?: string;
+    reps?: string;
+    completedAt?: string;
+  }>;
+  selectedVariants?: Record<string, string>;
+  workoutHistory?: Array<unknown>;
+  updatedAt?: string;
+  isReadOnly?: boolean;
 }
 
 /**
  * Busca dados atualizados da nuvem (Pull)
  */
 export async function pullSyncData(partnerId?: string): Promise<{
-  athlete: Record<string, unknown> | null;
-  partner: Record<string, unknown> | null;
+  athlete: CloudAthletePayload | null;
+  partner: CloudAthletePayload | null;
 } | null> {
   const token = getStoredToken();
   if (!token) return null;
@@ -309,12 +438,18 @@ export async function pullSyncData(partnerId?: string): Promise<{
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    if (!res.ok) return null;
-    return (await res.json()) as {
-      athlete: Record<string, unknown> | null;
-      partner: Record<string, unknown> | null;
+    if (!res.ok) {
+      if (res.status === 401) notifySyncStatus('offline');
+      return null;
+    }
+    const data = (await res.json()) as {
+      athlete: CloudAthletePayload | null;
+      partner: CloudAthletePayload | null;
     };
+    notifySyncStatus('synced');
+    return data;
   } catch {
+    notifySyncStatus('offline');
     return null;
   }
 }

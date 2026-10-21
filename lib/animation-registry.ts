@@ -782,7 +782,7 @@ export const VARIANT_REGISTRY: Record<string, EquipmentVariantMeta> = {
     primaryMuscles: ['Glúteo Máximo', 'Adutores da Coxa'],
     secondaryMuscles: ['Quadríceps', 'Isquiotibiais'],
     activeBodyParts: {
-      front: ['quads'],
+      front: ['quads', 'adductors'],
       back: ['glutes']
     },
     reps: '12 - 15',
