@@ -4,25 +4,50 @@ import React, { useEffect, useState } from 'react';
 import { Play, Pause, RotateCcw, Wind, Flame, Eye, Compass } from 'lucide-react';
 import {
   SquatSmithSvg,
+  SquatFreeBarSvg,
+  HackSquatMachineSvg,
   LegPress45Svg,
+  LegPressHorizontalSvg,
   LegExtensionSvg,
   LegCurlSvg,
+  LegCurlSeatedSvg,
+  StiffDumbbellSvg,
   CalfRaiseSvg,
-  PulldownSvg,
+  CalfRaiseLegPressSvg,
+  PulldownWideSvg,
+  PulldownCloseSvg,
   CableRowSvg,
+  TBarRowSvg,
   SingleArmRowSvg,
-  BicepsCurlSvg,
-  HammerCurlSvg,
-  ShoulderPressSvg,
-  LateralRaiseSvg,
-  RearDeltFlySvg,
+  SingleArmRowCableSvg,
+  BicepsCurlWBarSvg,
+  BicepsCurlCableSvg,
+  HammerCurlDumbbellSvg,
+  ShoulderPressDumbbellSvg,
+  ShoulderPressMachineSvg,
+  ShoulderPressSmithSvg,
+  LateralRaiseCableSvg,
+  LateralRaiseDumbbellSvg,
+  LateralRaiseMachineSvg,
+  RearDeltPeckDeckSvg,
+  FacepullCableSvg,
+  RearDeltDumbbellSvg,
   TricepsRopePushdownSvg,
-  HipThrustSvg,
+  TricepsBarPushdownSvg,
+  HipThrustMachineSvg,
+  HipThrustBarbellSvg,
   BulgarianSplitSquatSvg,
+  SumoSquatStepSvg,
   SeatedAbductorSvg,
-  BenchPressSvg,
+  CableStandingAbductionSvg,
+  BenchPressBarbellSvg,
+  BenchPressDumbbellSvg,
+  ChestPressMachineSvg,
   InclineBenchPressSvg,
+  InclineBenchSmithSvg,
   PeckDeckFlySvg,
+  CableCrossOverSvg,
+  DumbbellFlatFlySvg,
   PlankCoreSvg,
   AnimationInPreparationSvg
 } from './exercise-svg-models';
@@ -30,19 +55,21 @@ import {
 interface ExerciseAnimationProps {
   animationKey: string;
   exerciseName?: string;
+  equipmentName?: string;
   accentColor?: string;
 }
 
 export function ExerciseAnimation({
   animationKey,
   exerciseName = 'exercício',
+  equipmentName,
   accentColor = '#c3f75a'
 }: ExerciseAnimationProps) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [phase, setPhase] = useState<'concentric' | 'eccentric'>('concentric');
   const [isTechnicalMode, setIsTechnicalMode] = useState(false);
 
-  const isIsometric = animationKey === 'plank';
+  const isIsometric = animationKey === 'plank' || animationKey === 'plankFloor';
 
   // Alterna o ritmo biomecânico (fase concêntrica / excêntrica) para guiar respiração
   useEffect(() => {
@@ -68,15 +95,15 @@ export function ExerciseAnimation({
         eccentricLabel: 'Contração Isométrica'
       };
     }
-    if (animationKey === 'lateralRaise') {
+    if (animationKey.startsWith('lateralRaise')) {
       return {
-        breathing: phase === 'concentric' ? 'SOLTE O AR (Subindo até a altura dos ombros)' : 'PUXE O AR (Descendo suave sem bater halteres)',
+        breathing: phase === 'concentric' ? 'SOLTE O AR (Subindo até a altura dos ombros)' : 'PUXE O AR (Descendo suave sem bater)',
         cadence: 'Cadência: 2s subida · 1s pico · 3s descida lenta',
         concentricLabel: 'Abdução de Braços (Deltóide Lateral)',
         eccentricLabel: 'Fase Excêntrica Controlada'
       };
     }
-    if (animationKey === 'shoulderPress') {
+    if (animationKey.startsWith('shoulderPress')) {
       return {
         breathing: phase === 'concentric' ? 'SOLTE O AR (Empurrando acima da cabeça)' : 'PUXE O AR (Descendo na altura das orelhas)',
         cadence: 'Cadência: 2s subida · 3s descida lenta',
@@ -84,7 +111,7 @@ export function ExerciseAnimation({
         eccentricLabel: 'Descida Controlada'
       };
     }
-    if (animationKey === 'facepull') {
+    if (animationKey.startsWith('rearDelt') || animationKey === 'facepullCable' || animationKey === 'facepull') {
       return {
         breathing: phase === 'concentric' ? 'SOLTE O AR (Puxando cotovelos para trás)' : 'PUXE O AR (Retorno alongando)',
         cadence: 'Cadência: 2s puxada · 1s contração · 3s retorno',
@@ -92,15 +119,22 @@ export function ExerciseAnimation({
         eccentricLabel: 'Alongamento Dorsal/Ombro'
       };
     }
-    if (animationKey === 'tricepsRope') {
+    if (animationKey.startsWith('triceps')) {
       return {
-        breathing: phase === 'concentric' ? 'SOLTE O AR (Estendendo e abrindo corda)' : 'PUXE O AR (Subindo até 90°)',
+        breathing: phase === 'concentric' ? 'SOLTE O AR (Estendendo cotovelos)' : 'PUXE O AR (Subindo até 90°)',
         cadence: 'Cadência: 2s extensão · 1s pico · 3s retorno',
         concentricLabel: 'Extensão de Cotovelos (Tríceps)',
         eccentricLabel: 'Fase Excêntrica (90°)'
       };
     }
-    if (['pulldown', 'row', 'singleRow'].includes(animationKey)) {
+    if (
+      animationKey.startsWith('pulldown') ||
+      animationKey.startsWith('cableRow') ||
+      animationKey.startsWith('tbarRow') ||
+      animationKey.startsWith('singleArmRow') ||
+      animationKey === 'row' ||
+      animationKey === 'singleRow'
+    ) {
       return {
         breathing: phase === 'concentric' ? 'SOLTE O AR (Puxando ao corpo)' : 'PUXE O AR (Retorno alongando)',
         cadence: 'Cadência: 2s puxada · 1s pico · 3s retorno',
@@ -108,15 +142,25 @@ export function ExerciseAnimation({
         eccentricLabel: 'Fase Excêntrica (Alongamento)'
       };
     }
-    if (['benchpress', 'inclineBench', 'fly'].includes(animationKey)) {
+    if (
+      animationKey.startsWith('benchPress') ||
+      animationKey.startsWith('chestPress') ||
+      animationKey.startsWith('inclineBench') ||
+      animationKey.startsWith('peckDeck') ||
+      animationKey.startsWith('cableCross') ||
+      animationKey.startsWith('dumbbellFlatFly') ||
+      animationKey === 'benchpress' ||
+      animationKey === 'inclineBench' ||
+      animationKey === 'fly'
+    ) {
       return {
-        breathing: phase === 'concentric' ? 'SOLTE O AR (Empurrando o peso)' : 'PUXE O AR (Descida controlada)',
+        breathing: phase === 'concentric' ? 'SOLTE O AR (Empurrando a carga)' : 'PUXE O AR (Descida controlada)',
         cadence: 'Cadência: 2s subida · 3s descida lenta',
         concentricLabel: 'Fase de Empurrada (Peitoral)',
         eccentricLabel: 'Fase de Alongamento'
       };
     }
-    if (animationKey === 'hipthrust') {
+    if (animationKey.startsWith('hipThrust') || animationKey === 'hipthrust') {
       return {
         breathing: phase === 'concentric' ? 'SOLTE O AR (Pico no topo alinhado)' : 'PUXE O AR (Descendo suave)',
         cadence: 'Cadência: 2s subida · 2s pausa no topo · 3s descida',
@@ -124,7 +168,7 @@ export function ExerciseAnimation({
         eccentricLabel: 'Retorno sem encostar no chão'
       };
     }
-    if (animationKey === 'abductor') {
+    if (animationKey.startsWith('seatedAbductor') || animationKey.startsWith('cableStandingAbduction') || animationKey === 'abductor') {
       return {
         breathing: phase === 'concentric' ? 'SOLTE O AR (Abrindo pernas no máximo)' : 'PUXE O AR (Fechando com controle)',
         cadence: 'Cadência: 2s abertura · 2s pico · 3s retorno',
@@ -132,23 +176,23 @@ export function ExerciseAnimation({
         eccentricLabel: 'Retorno Resistido'
       };
     }
-    if (animationKey === 'legpress') {
+    if (animationKey.startsWith('legpress')) {
       return {
-        breathing: phase === 'concentric' ? 'SOLTE O AR (Empurrando a plataforma a 45°)' : 'PUXE O AR (Descendo até 90°)',
+        breathing: phase === 'concentric' ? 'SOLTE O AR (Empurrando a plataforma)' : 'PUXE O AR (Descendo até 90°)',
         cadence: 'Cadência: 2s subida · 3s descida lenta',
-        concentricLabel: 'Extensão a 45° (Quadríceps/Glúteo)',
+        concentricLabel: 'Extensão de Pernas (Quadríceps/Glúteo)',
         eccentricLabel: 'Fase Excêntrica Suave'
       };
     }
-    if (animationKey === 'bulgarian') {
+    if (animationKey.startsWith('bulgarian') || animationKey.startsWith('sumo')) {
       return {
-        breathing: phase === 'concentric' ? 'SOLTE O AR (Subindo na perna dianteira)' : 'PUXE O AR (Afundando joelho traseiro)',
-        cadence: 'Cadência: 2s subida · 3s descida unilateral',
-        concentricLabel: 'Foco Unilateral (Glúteo/Quadríceps)',
+        breathing: phase === 'concentric' ? 'SOLTE O AR (Subindo na força das pernas)' : 'PUXE O AR (Descendo controlado)',
+        cadence: 'Cadência: 2s subida · 3s descida profunda',
+        concentricLabel: 'Foco Unilateral / Glúteos',
         eccentricLabel: 'Descida Estável sem Balançar'
       };
     }
-    if (['biceps', 'hammer'].includes(animationKey)) {
+    if (animationKey.startsWith('biceps') || animationKey.startsWith('hammer')) {
       return {
         breathing: phase === 'concentric' ? 'SOLTE O AR (Flexionando cotovelos)' : 'PUXE O AR (Descida em 3 segundos)',
         cadence: 'Cadência: 2s flexão · 1s pico · 3s descida',
@@ -232,9 +276,9 @@ export function ExerciseAnimation({
           }}
         />
 
-        {/* Modelo SVG específico do exercício */}
+        {/* Modelo SVG específico do equipamento/exercício */}
         <div className={`transition-all duration-700 ease-in-out ${isPlaying ? '' : 'opacity-90'}`}>
-          {renderExerciseComponent(animationKey, phase, accentColor, isTechnicalMode, exerciseName)}
+          {renderExerciseComponent(animationKey, phase, accentColor, isTechnicalMode, exerciseName, equipmentName)}
         </div>
 
         {/* Barra de Ritmo de Movimento */}
@@ -257,73 +301,146 @@ function renderExerciseComponent(
   phase: 'concentric' | 'eccentric',
   accentColor: string,
   isTechnicalMode: boolean,
-  exerciseName?: string
+  exerciseName?: string,
+  equipmentName?: string
 ) {
   switch (key) {
+    // 1. Pernas & Agachamentos
+    case 'squatSmith':
     case 'squat':
       return <SquatSmithSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+    case 'squatFree':
+      return <SquatFreeBarSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'hackSquat':
+      return <HackSquatMachineSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'legpress45':
     case 'legpress':
       return <LegPress45Svg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+    case 'legpressHorizontal':
+      return <LegPressHorizontalSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'legextBilateral':
+    case 'legextCable':
     case 'legext':
       return <LegExtensionSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+    case 'legcurlProne':
     case 'legcurl':
       return <LegCurlSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+    case 'legcurlSeated':
+      return <LegCurlSeatedSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'stiffDumbbell':
+      return <StiffDumbbellSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'calfStanding':
+    case 'calfSeated':
     case 'calf':
       return <CalfRaiseSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'calfLegPress':
+      return <CalfRaiseLegPressSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
 
+    // 2. Costas, Dorsal & Puxadas
+    case 'pulldownWide':
     case 'pulldown':
-      return <PulldownSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+      return <PulldownWideSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'pulldownClose':
+      return <PulldownCloseSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'cableRowSeated':
     case 'row':
       return <CableRowSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+    case 'tbarRow':
+      return <TBarRowSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'singleArmRowDumbbell':
     case 'singleRow':
       return <SingleArmRowSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'singleArmRowCable':
+      return <SingleArmRowCableSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
 
+    // 3. Braços & Tríceps
+    case 'bicepsWBar':
     case 'biceps':
-      return <BicepsCurlSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+      return <BicepsCurlWBarSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'bicepsCable':
+      return <BicepsCurlCableSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'hammerDumbbell':
     case 'hammer':
-      return <HammerCurlSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
-    case 'shoulderPress':
-      return <ShoulderPressSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
-    case 'lateralRaise':
-      return <LateralRaiseSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
-    case 'facepull':
-      return <RearDeltFlySvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+      return <HammerCurlDumbbellSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'tricepsRopePushdown':
     case 'tricepsRope':
       return <TricepsRopePushdownSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'tricepsBarPushdown':
+      return <TricepsBarPushdownSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
 
+    // 4. Ombros & Deltoides (Diferenciados por Equipamento!)
+    case 'shoulderPressDumbbell':
+    case 'shoulderPress':
+      return <ShoulderPressDumbbellSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'shoulderPressMachine':
+      return <ShoulderPressMachineSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'shoulderPressSmith':
+      return <ShoulderPressSmithSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+
+    case 'lateralRaiseCable':
+    case 'lateralRaise':
+      return <LateralRaiseCableSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'lateralRaiseDumbbell':
+      return <LateralRaiseDumbbellSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'lateralRaiseMachine':
+      return <LateralRaiseMachineSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+
+    case 'rearDeltPeckDeck':
+    case 'facepull':
+      return <RearDeltPeckDeckSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'facepullCable':
+      return <FacepullCableSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'rearDeltDumbbell':
+      return <RearDeltDumbbellSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+
+    // 5. Glúteos & Core
+    case 'hipThrustMachine':
     case 'hipthrust':
-      return <HipThrustSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+      return <HipThrustMachineSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'hipThrustBarbell':
+      return <HipThrustBarbellSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'bulgarianSplitSquat':
     case 'bulgarian':
       return <BulgarianSplitSquatSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+    case 'sumoSquatStep':
+      return <SumoSquatStepSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'seatedAbductorMachine':
     case 'abductor':
       return <SeatedAbductorSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
-    case 'benchpress':
-      return <BenchPressSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
-    case 'inclineBench':
-      return <InclineBenchPressSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
-    case 'fly':
-      return <PeckDeckFlySvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
-
+    case 'cableStandingAbduction':
+      return <CableStandingAbductionSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'plankFloor':
     case 'plank':
       return <PlankCoreSvg accentColor={accentColor} />;
 
+    // 6. Peitoral & Supinos
+    case 'benchPressBarbell':
+    case 'benchpress':
+      return <BenchPressBarbellSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'benchPressDumbbell':
+      return <BenchPressDumbbellSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'chestPressMachine':
+      return <ChestPressMachineSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'inclineBenchDumbbell':
+    case 'inclineBench':
+      return <InclineBenchPressSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'inclineBenchSmith':
+      return <InclineBenchSmithSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'peckDeckFly':
+    case 'fly':
+      return <PeckDeckFlySvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'cableCrossOver':
+      return <CableCrossOverSvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+    case 'dumbbellFlatFly':
+      return <DumbbellFlatFlySvg phase={phase} accentColor={accentColor} isTechnicalMode={isTechnicalMode} />;
+
     default:
-      return <AnimationInPreparationSvg accentColor={accentColor} exerciseName={exerciseName} />;
+      return (
+        <AnimationInPreparationSvg
+          accentColor={accentColor}
+          exerciseName={exerciseName}
+          equipmentName={equipmentName}
+        />
+      );
   }
 }

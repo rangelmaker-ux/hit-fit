@@ -1,3 +1,13 @@
+export interface ExerciseEquipmentVariant {
+  variantId?: string;
+  name: string;
+  description: string;
+  settingTips?: string;
+  equipmentType?: string;
+  animationKey?: string;
+  animationStatus?: 'verified' | 'in_preparation';
+}
+
 export interface Exercise {
   id: string;
   name: string;
@@ -11,16 +21,10 @@ export interface Exercise {
     front: string[];
     back: string[];
   };
+  activeVariantId: string;
   machines: {
-    primary: {
-      name: string;
-      description: string;
-      settingTips: string;
-    };
-    alternatives: {
-      name: string;
-      description: string;
-    }[];
+    primary: ExerciseEquipmentVariant;
+    alternatives: ExerciseEquipmentVariant[];
   };
   biomechanics: {
     setup: string;
@@ -29,7 +33,7 @@ export interface Exercise {
     commonMistake: string;
     proTip: string;
   };
-  animationKey: 'squat' | 'legpress' | 'legext' | 'legcurl' | 'calf' | 'pulldown' | 'row' | 'singleRow' | 'biceps' | 'hammer' | 'shoulderPress' | 'lateralRaise' | 'facepull' | 'tricepsRope' | 'hipthrust' | 'bulgarian' | 'abductor' | 'benchpress' | 'inclineBench' | 'fly' | 'plank';
+  animationKey: string;
 }
 
 export interface DayWorkout {
@@ -68,6 +72,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
     exercises: [
       {
         id: 'leg-1',
+        activeVariantId: 'leg-1-smith',
         name: 'Agachamento (Smith ou Livre)',
         targetMuscle: 'Quadríceps & Glúteo Máximo',
         secondaryMuscles: ['Isquiotibiais', 'Panturrilha', 'Eretores da Espinha'],
@@ -82,16 +87,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Smith Machine (Barra Guiada)',
+            variantId: 'leg-1-smith',
+            equipmentType: 'smith_machine',
+            animationKey: 'squatSmith',
+            animationStatus: 'verified',
             description: 'Barra com trilho fixo e travas de segurança ajustáveis.',
             settingTips: 'Posicione as travas de segurança na altura do quadril agachado.'
           },
           alternatives: [
             {
               name: 'Rack de Agachamento Livre',
+              variantId: 'leg-1-free-bar',
+              equipmentType: 'free_barbell_rack',
+              animationKey: 'squatFree',
+              animationStatus: 'verified',
               description: 'Barra olímpica com apoio de ombro para maior ativação de estabilizadores.'
             },
             {
               name: 'Hack Squat 45°',
+              variantId: 'leg-1-hack',
+              equipmentType: 'hack_squat_45',
+              animationKey: 'hackSquat',
+              animationStatus: 'verified',
               description: 'Máquina articulada com encosto inclinado, poupando lombar.'
             }
           ]
@@ -103,10 +120,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Deixar os joelhos colapsarem para dentro (valgo dinâmico) ou tirar os calcanhares do chão.',
           proTip: 'Mantenha o peitoral estufado e o abdômen travado (brace abdominal) durante toda a descida.'
         },
-        animationKey: 'squat'
+        animationKey: 'squatSmith'
       },
       {
         id: 'leg-2',
+        activeVariantId: 'leg-2-45',
         name: 'Leg Press 45°',
         targetMuscle: 'Quadríceps & Glúteos',
         secondaryMuscles: ['Adutores', 'Posterior de coxa'],
@@ -121,12 +139,20 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Leg Press 45° de Anilhas',
+            variantId: 'leg-2-45',
+            equipmentType: 'leg_press_45',
+            animationKey: 'legpress45',
+            animationStatus: 'verified',
             description: 'Plataforma inclinada sobre trilhos com suporte para anilhas.',
             settingTips: 'Ajuste o encosto para não arredondar a lombar na descida máxima.'
           },
           alternatives: [
             {
               name: 'Leg Press Horizontal com Placas',
+              variantId: 'leg-2-horizontal',
+              equipmentType: 'horizontal_leg_press',
+              animationKey: 'legpressHorizontal',
+              animationStatus: 'verified',
               description: 'Banco deslizante sentado com seleção de pinos.'
             }
           ]
@@ -138,10 +164,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Tirar o glúteo e a lombar do encosto no final da descida (risco grave para a coluna).',
           proTip: 'Nunca trave os joelhos no topo (mantenha microflexão para manter a tensão constante).'
         },
-        animationKey: 'legpress'
+        animationKey: 'legpress45'
       },
       {
         id: 'leg-3',
+        activeVariantId: 'leg-3-bilateral',
         name: 'Cadeira Extensora',
         targetMuscle: 'Quadríceps Isolado',
         secondaryMuscles: ['Reto Femoral'],
@@ -156,12 +183,20 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Cadeira Extensora Tradicional',
+            variantId: 'leg-3-bilateral',
+            equipmentType: 'leg_extension_chair',
+            animationKey: 'legextBilateral',
+            animationStatus: 'verified',
             description: 'Banco com rolo de espuma ajustável na altura do tornozelo.',
             settingTips: 'O eixo de rotação da máquina deve coincidir exatamente com a lateral do seu joelho.'
           },
           alternatives: [
             {
               name: 'Extensora Unilateral no Cabo',
+              variantId: 'leg-3-cable-unilateral',
+              equipmentType: 'cable_unilateral_ext',
+              animationKey: 'legextCable',
+              animationStatus: 'verified',
               description: 'Cabo baixo com tornozeleira em pé.'
             }
           ]
@@ -173,10 +208,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Dar tranco no peso no início do movimento em vez de contração controlada.',
           proTip: 'Segure firme nas manoplas laterais para o bumbum não levantar do banco.'
         },
-        animationKey: 'legext'
+        animationKey: 'legextBilateral'
       },
       {
         id: 'leg-4',
+        activeVariantId: 'leg-4-prone',
         name: 'Mesa ou Cadeira Flexora',
         targetMuscle: 'Isquiotibiais (Posterior de Coxa)',
         secondaryMuscles: ['Panturrilhas'],
@@ -191,16 +227,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Mesa Flexora (Deitado)',
+            variantId: 'leg-4-prone',
+            equipmentType: 'prone_leg_curl',
+            animationKey: 'legcurlProne',
+            animationStatus: 'verified',
             description: 'Aparelho deitado de barriga para baixo com rolete posterior no calcanhar.',
             settingTips: 'Ajuste a almofada 3 dedos acima do tendão de Aquiles.'
           },
           alternatives: [
             {
               name: 'Cadeira Flexora Sentada',
+              variantId: 'leg-4-seated',
+              equipmentType: 'seated_leg_curl',
+              animationKey: 'legcurlSeated',
+              animationStatus: 'verified',
               description: 'Aparelho sentado com trava sobre as coxas.'
             },
             {
               name: 'Stiff com Halteres',
+              variantId: 'leg-4-stiff',
+              equipmentType: 'standing_dumbbells_stiff',
+              animationKey: 'stiffDumbbell',
+              animationStatus: 'verified',
               description: 'Exercício livre com halteres focando no alongamento posterior.'
             }
           ]
@@ -212,10 +260,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Empinar o quadril e descolar a barriga do banco para roubar o peso.',
           proTip: 'Mantenha os pés em dorsiflexão (dedos apontados para as canelas) para focar no posterior.'
         },
-        animationKey: 'legcurl'
+        animationKey: 'legcurlProne'
       },
       {
         id: 'leg-5',
+        activeVariantId: 'leg-5-standing',
         name: 'Panturrilha (Leg ou em Pé)',
         targetMuscle: 'Gastrocnêmio & Sóleo',
         secondaryMuscles: ['Tendão de Aquiles'],
@@ -230,16 +279,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Gêmeos em Pé na Máquina',
+            variantId: 'leg-5-standing',
+            equipmentType: 'standing_calf_machine',
+            animationKey: 'calfStanding',
+            animationStatus: 'verified',
             description: 'Apoio acolchoado nos ombros e degrau para os antepés.',
             settingTips: 'Altura dos apoios regulada para você conseguir esticar o tornozelo completamente.'
           },
           alternatives: [
             {
               name: 'Panturrilha no Leg Press',
+              variantId: 'leg-5-legpress',
+              equipmentType: 'legpress_calf',
+              animationKey: 'calfLegPress',
+              animationStatus: 'verified',
               description: 'Apoio da ponta dos pés na borda inferior da plataforma.'
             },
             {
               name: 'Gêmeos Sentado (Cavalinho)',
+              variantId: 'leg-5-seated',
+              equipmentType: 'seated_calf_machine',
+              animationKey: 'calfSeated',
+              animationStatus: 'verified',
               description: 'Banco com trava sobre os joelhos com foco no sóleo.'
             }
           ]
@@ -251,7 +312,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Fazer repetições curtas e quicando sem amplitude.',
           proTip: 'A queimação profunda no topo é o sinal de recrutamento das fibras musculares densas.'
         },
-        animationKey: 'calf'
+        animationKey: 'calfStanding'
       }
     ]
   },
@@ -274,6 +335,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
     exercises: [
       {
         id: 'back-1',
+        activeVariantId: 'back-1-wide',
         name: 'Puxada Frontal na Polia',
         targetMuscle: 'Latíssimo do Dorso (Grande Dorsal)',
         secondaryMuscles: ['Bíceps', 'Trapézio inferior', 'Romboides'],
@@ -288,16 +350,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Polia Alta (Pulley)',
+            variantId: 'back-1-wide',
+            equipmentType: 'high_pulley_lat',
+            animationKey: 'pulldownWide',
+            animationStatus: 'verified',
             description: 'Torre com cabo superior e banco com almofadas para travar os joelhos.',
             settingTips: 'Ajuste a almofada dos joelhos para seu corpo ficar 100% firme sem levantar.'
           },
           alternatives: [
             {
               name: 'Puxada Articulada Convergente',
+              variantId: 'back-1-close-triangle',
+              equipmentType: 'pulldown_triangle',
+              animationKey: 'pulldownClose',
+              animationStatus: 'verified',
               description: 'Máquina articulada com pegadas ergonômicas independentes.'
             },
             {
               name: 'Barra Fixa com Graviton (ou Elástico)',
+              variantId: 'back-1-graviton',
+              equipmentType: 'graviton_pullup',
+              animationKey: 'pulldownClose',
+              animationStatus: 'verified',
               description: 'Para quem quer força funcional com suporte de contrapeso.'
             }
           ]
@@ -309,10 +383,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Puxar com a força dos braços e arredondar as costas para a frente.',
           proTip: 'Imagine que está puxando com os cotovelos para baixo e para trás, e não com as mãos.'
         },
-        animationKey: 'pulldown'
+        animationKey: 'pulldownWide'
       },
       {
         id: 'back-2',
+        activeVariantId: 'back-2-seated-cable',
         name: 'Remada Baixa no Triângulo',
         targetMuscle: 'Miolo das Costas & Romboides',
         secondaryMuscles: ['Dorsal', 'Bíceps', 'Deltoide posterior'],
@@ -327,16 +402,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Remada Sentada no Cabo (Polia Baixa)',
+            variantId: 'back-2-seated-cable',
+            equipmentType: 'low_pulley_row',
+            animationKey: 'cableRowSeated',
+            animationStatus: 'verified',
             description: 'Banco reto no nível do chão com apoio para os pés e puxador cabo triângulo.',
             settingTips: 'Mantenha os joelhos com leve flexão para proteger a coluna.'
           },
           alternatives: [
             {
               name: 'Remada Cavalinho (T-Bar)',
+              variantId: 'back-2-tbar',
+              equipmentType: 't_bar_row_floor',
+              animationKey: 'tbarRow',
+              animationStatus: 'verified',
               description: 'Barra com anilhas e pegada fechada com apoio de peito.'
             },
             {
               name: 'Remada Máquina Articulada',
+              variantId: 'back-2-machine',
+              equipmentType: 'chest_supported_row',
+              animationKey: 'cableRowSeated',
+              animationStatus: 'verified',
               description: 'Aparelho com apoio peitoral que elimina a carga na lombar.'
             }
           ]
@@ -348,10 +435,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Ficar balançando a coluna excessivamente para frente e para trás.',
           proTip: 'Aperte as costas no final da puxada como se estivesse segurando uma caneta entre as omoplatas.'
         },
-        animationKey: 'row'
+        animationKey: 'cableRowSeated'
       },
       {
         id: 'back-3',
+        activeVariantId: 'back-3-dumbbell',
         name: 'Remada Unilateral (Serrote)',
         targetMuscle: 'Dorsal & Espessura das Costas',
         secondaryMuscles: ['Bíceps', 'Antebraço', 'Core'],
@@ -366,12 +454,20 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Banco Reto + Halter Livre',
+            variantId: 'back-3-dumbbell',
+            equipmentType: 'flat_bench_single_dumbbell',
+            animationKey: 'singleArmRowDumbbell',
+            animationStatus: 'verified',
             description: 'Apoio de joelho e mão no banco reto com peso livre.',
             settingTips: 'Mantenha o banco plano e selecione halteres bem balanceados.'
           },
           alternatives: [
             {
               name: 'Remada Unilateral na Polia Baixa',
+              variantId: 'back-3-cable',
+              equipmentType: 'cable_single_arm_row',
+              animationKey: 'singleArmRowCable',
+              animationStatus: 'verified',
               description: 'Tensão contínua com puxador estribo individual.'
             }
           ]
@@ -383,10 +479,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Girar o tronco para cima no impulso para levantar o peso.',
           proTip: 'O movimento é em arco: suba trazendo o halter perto do quadril, e não no peito.'
         },
-        animationKey: 'singleRow'
+        animationKey: 'singleArmRowDumbbell'
       },
       {
         id: 'back-4',
+        activeVariantId: 'back-4-wbar',
         name: 'Rosca Direta com Barra W',
         targetMuscle: 'Bíceps Braquial',
         secondaryMuscles: ['Braquial', 'Antebraços'],
@@ -401,16 +498,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Barra W Olímpica ou Montada',
+            variantId: 'back-4-wbar',
+            equipmentType: 'w_bar_biceps',
+            animationKey: 'bicepsWBar',
+            animationStatus: 'verified',
             description: 'Barra com ondulações anatômicas que protegem os punhos.',
             settingTips: 'Escolha a pegada média onde seus polegares apontam suavemente para dentro.'
           },
           alternatives: [
             {
               name: 'Rosca no Cabo com Barra Reta',
+              variantId: 'back-4-cable',
+              equipmentType: 'low_pulley_biceps',
+              animationKey: 'bicepsCable',
+              animationStatus: 'verified',
               description: 'Polia baixa para manter a tensão constante no topo do movimento.'
             },
             {
               name: 'Rosca com Halteres Alternada',
+              variantId: 'back-4-dumbbells',
+              equipmentType: 'alternating_dumbbells',
+              animationKey: 'bicepsWBar',
+              animationStatus: 'verified',
               description: 'Permite rotação do punho (supinação) para pico do bíceps.'
             }
           ]
@@ -422,10 +531,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Jogar o quadril para frente para dar impulso (roubo lombar).',
           proTip: 'Imagine seus cotovelos parafusados nas costelas: só o antebraço se move.'
         },
-        animationKey: 'biceps'
+        animationKey: 'bicepsWBar'
       },
       {
         id: 'back-5',
+        activeVariantId: 'back-5-dumbbells',
         name: 'Rosca Martelo com Halteres',
         targetMuscle: 'Braquial & Braquiorradial',
         secondaryMuscles: ['Bíceps', 'Pegada/Antebraço'],
@@ -440,12 +550,20 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Halteres Emborrachados',
+            variantId: 'back-5-dumbbells',
+            equipmentType: 'neutral_dumbbells',
+            animationKey: 'hammerDumbbell',
+            animationStatus: 'verified',
             description: 'Par de halteres com pegada neutra (palmas voltadas uma para a outra).',
             settingTips: 'Pode ser feito em pé ou sentado com apoio nas costas.'
           },
           alternatives: [
             {
               name: 'Rosca Martelo na Corda (Polia Baixa)',
+              variantId: 'back-5-rope',
+              equipmentType: 'rope_hammer_curl',
+              animationKey: 'bicepsCable',
+              animationStatus: 'verified',
               description: 'Puxador corda na polia baixa com pegada firme.'
             }
           ]
@@ -457,10 +575,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Girar os punhos no meio da repetição.',
           proTip: 'Esse exercício dá volume na lateral do braço, fazendo o braço parecer mais grosso e desenhado.'
         },
-        animationKey: 'hammer'
+        animationKey: 'hammerDumbbell'
       },
       {
         id: 'back-6',
+        activeVariantId: 'back-6-floor',
         name: 'Prancha Isométrica + Infra',
         targetMuscle: 'Reto Abdominal & Core Profundo',
         secondaryMuscles: ['Transverso abdominal', 'Lombar'],
@@ -475,12 +594,20 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Colchonete / Torre de Paralelas',
+            variantId: 'back-6-floor',
+            equipmentType: 'isometric_floor_mat',
+            animationKey: 'plankFloor',
+            animationStatus: 'verified',
             description: 'Superfície acolchoada no chão ou apoio de cotovelo na torre de abdominais.',
             settingTips: 'Certifique-se de que o colchonete apoia bem os antebraços.'
           },
           alternatives: [
             {
               name: 'Abdominal na Bola Suíça',
+              variantId: 'back-6-ball',
+              equipmentType: 'swiss_ball_core',
+              animationKey: 'plankFloor',
+              animationStatus: 'verified',
               description: 'Maior recrutamento de estabilidade do core.'
             }
           ]
@@ -492,7 +619,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Deixar o quadril cair em direção ao chão (sobrecarrega a lombar).',
           proTip: 'Puxe o umbigo em direção às costas para acionar o transverso abdominal.'
         },
-        animationKey: 'plank'
+        animationKey: 'plankFloor'
       }
     ]
   },
@@ -515,6 +642,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
     exercises: [
       {
         id: 'sh-1',
+        activeVariantId: 'sh-1-dumbbells',
         name: 'Desenvolvimento com Halteres',
         targetMuscle: 'Deltoide Anterior & Médio',
         secondaryMuscles: ['Tríceps', 'Trapézio Superior'],
@@ -529,16 +657,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Banco Regulável a 75° ou 80°',
+            variantId: 'sh-1-dumbbells',
+            equipmentType: 'incline_bench_dumbbells',
+            animationKey: 'shoulderPressDumbbell',
+            animationStatus: 'verified',
             description: 'Banco com encosto ligeiramente inclinado para poupar a lombar.',
             settingTips: 'Evite o banco em 90° retos; a leve inclinação a 80° é muito mais segura.'
           },
           alternatives: [
             {
               name: 'Desenvolvimento em Máquina Articulada',
+              variantId: 'sh-1-machine',
+              equipmentType: 'articulated_shoulder_press',
+              animationKey: 'shoulderPressMachine',
+              animationStatus: 'verified',
               description: 'Trajetória convergente com apoio de peito/costas.'
             },
             {
               name: 'Desenvolvimento na Barra Guiada (Smith)',
+              variantId: 'sh-1-smith',
+              equipmentType: 'smith_shoulder_press',
+              animationKey: 'shoulderPressSmith',
+              animationStatus: 'verified',
               description: 'Barra no Smith descendo na linha do queixo.'
             }
           ]
@@ -550,10 +690,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Abrir demais os cotovelos para os lados (estresse na articulação do manguito rotador).',
           proTip: 'Não bata os halteres no alto; pare um pouco antes para manter a tensão nos deltoides.'
         },
-        animationKey: 'shoulderPress'
+        animationKey: 'shoulderPressDumbbell'
       },
       {
         id: 'sh-2',
+        activeVariantId: 'sh-2-cables',
         name: 'Elevação Lateral no Cabo ou Halteres',
         targetMuscle: 'Deltoide Lateral (Ombro Redondo)',
         secondaryMuscles: ['Trapézio Superior'],
@@ -568,16 +709,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Cross Over (Polia Baixa)',
+            variantId: 'sh-2-cables',
+            equipmentType: 'cable_lateral_raise',
+            animationKey: 'lateralRaiseCable',
+            animationStatus: 'verified',
             description: 'Cabo passando por trás ou pela frente do corpo com puxador estribo.',
             settingTips: 'A polia baixa mantém a tensão muscular desde o início da subida.'
           },
           alternatives: [
             {
               name: 'Elevação Lateral com Halteres',
+              variantId: 'sh-2-dumbbells',
+              equipmentType: 'free_dumbbell_lateral_raise',
+              animationKey: 'lateralRaiseDumbbell',
+              animationStatus: 'verified',
               description: 'Exercício clássico com halteres leves a moderados.'
             },
             {
               name: 'Máquina de Elevação Lateral Sentado',
+              variantId: 'sh-2-machine',
+              equipmentType: 'seated_lateral_machine',
+              animationKey: 'lateralRaiseMachine',
+              animationStatus: 'verified',
               description: 'Alavancas com almofadas apoiadas nos braços.'
             }
           ]
@@ -589,10 +742,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Usar peso excessivo e ficar dando trancos com o tronco.',
           proTip: 'Imagine que está despejando água de duas jarras no ponto mais alto.'
         },
-        animationKey: 'lateralRaise'
+        animationKey: 'lateralRaiseCable'
       },
       {
         id: 'sh-3',
+        activeVariantId: 'sh-3-peck-deck',
         name: 'Crucifixo Inverso (Peck Deck ou Cabo)',
         targetMuscle: 'Deltoide Posterior & Trapézio Médio',
         secondaryMuscles: ['Romboides', 'Manguito Rotador'],
@@ -607,16 +761,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Máquina Peck Deck Invertida (Voador Inverso)',
+            variantId: 'sh-3-peck-deck',
+            equipmentType: 'rear_delt_peck_deck',
+            animationKey: 'rearDeltPeckDeck',
+            animationStatus: 'verified',
             description: 'Sentado de frente para o encosto com braços na altura dos ombros.',
             settingTips: 'Ajuste a altura do banco para que suas mãos fiquem na linha exata dos ombros.'
           },
           alternatives: [
             {
               name: 'Face Pull na Corda (Polia Alta)',
+              variantId: 'sh-3-facepull',
+              equipmentType: 'high_pulley_rope_facepull',
+              animationKey: 'facepullCable',
+              animationStatus: 'verified',
               description: 'Puxada em direção à testa afastando as pontas da corda.'
             },
             {
               name: 'Crucifixo Inverso com Halteres',
+              variantId: 'sh-3-dumbbells',
+              equipmentType: 'bent_over_dumbbells',
+              animationKey: 'rearDeltDumbbell',
+              animationStatus: 'verified',
               description: 'Tronco inclinado a 45° com peito apoiado no banco.'
             }
           ]
@@ -628,10 +794,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Encolher os ombros no pescoço ativando só o trapézio superior.',
           proTip: 'Mantenha os ombros relaxados para baixo e foque em sentir a parte de trás do deltoide.'
         },
-        animationKey: 'facepull'
+        animationKey: 'rearDeltPeckDeck'
       },
       {
         id: 'sh-4',
+        activeVariantId: 'sh-4-rope',
         name: 'Tríceps Corda na Polia Alta',
         targetMuscle: 'Tríceps (Cabeça Lateral)',
         secondaryMuscles: ['Antebraços'],
@@ -646,12 +813,20 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Polia Alta com Acessório Corda',
+            variantId: 'sh-4-rope',
+            equipmentType: 'high_pulley_rope_triceps',
+            animationKey: 'tricepsRopePushdown',
+            animationStatus: 'verified',
             description: 'Cabo superior com corda dupla de pontas emborrachadas.',
             settingTips: 'Regule a roldana na altura máxima para amplitude total.'
           },
           alternatives: [
             {
               name: 'Tríceps Barra Reta ou V',
+              variantId: 'sh-4-bar',
+              equipmentType: 'high_pulley_bar_triceps',
+              animationKey: 'tricepsBarPushdown',
+              animationStatus: 'verified',
               description: 'Permite mais estabilidade e cargas maiores.'
             }
           ]
@@ -663,7 +838,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Deixar os cotovelos irem para frente e para trás na repetição.',
           proTip: 'Segure 1 segundo no final com o tríceps totalmente espremido antes de voltar.'
         },
-        animationKey: 'tricepsRope'
+        animationKey: 'tricepsRopePushdown'
       }
     ]
   },
@@ -686,6 +861,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
     exercises: [
       {
         id: 'glute-1',
+        activeVariantId: 'glute-1-machine',
         name: 'Elevação Pélvica (Hip Thrust)',
         targetMuscle: 'Glúteo Máximo',
         secondaryMuscles: ['Isquiotibiais', 'Eretores da Espinha'],
@@ -700,16 +876,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Máquina Hip Thrust Dedicada',
+            variantId: 'glute-1-machine',
+            equipmentType: 'hip_thrust_machine',
+            animationKey: 'hipThrustMachine',
+            animationStatus: 'verified',
             description: 'Aparelho com cinto acolchoado, apoio de costas fixo e plataforma de pés.',
             settingTips: 'Ajuste o cinto bem firme sobre a dobra do quadril (crista ilíaca).'
           },
           alternatives: [
             {
               name: 'Banco Livre + Barra com Espuma',
+              variantId: 'glute-1-barbell',
+              equipmentType: 'flat_bench_hip_thrust',
+              animationKey: 'hipThrustBarbell',
+              animationStatus: 'verified',
               description: 'Apoio das escápulas no banco e barra com protetor de quadril.'
             },
             {
               name: 'Elevação Pélvica no Smith Machine',
+              variantId: 'glute-1-smith',
+              equipmentType: 'smith_hip_thrust',
+              animationKey: 'hipThrustMachine',
+              animationStatus: 'verified',
               description: 'Mais facilidade para travar e destravar o peso sozinho.'
             }
           ]
@@ -721,10 +909,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Hiperextender a lombar no topo em vez de contrair o glúteo.',
           proTip: 'Mantenha o queixo encostado no peito durante todo o movimento para proteger a coluna.'
         },
-        animationKey: 'hipthrust'
+        animationKey: 'hipThrustMachine'
       },
       {
         id: 'glute-2',
+        activeVariantId: 'glute-2-bulgarian',
         name: 'Agachamento Búlgaro ou Sumô',
         targetMuscle: 'Glúteo Máximo & Quadríceps',
         secondaryMuscles: ['Adutores', 'Posterior de Coxa'],
@@ -739,12 +928,20 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Banco Reto ou Step + Halteres',
+            variantId: 'glute-2-bulgarian',
+            equipmentType: 'bulgarian_split_bench',
+            animationKey: 'bulgarianSplitSquat',
+            animationStatus: 'verified',
             description: 'Pé traseiro apoiado no banco e halteres nas mãos.',
             settingTips: 'Coloque um colchonete no chão para guiar o joelho de trás.'
           },
           alternatives: [
             {
               name: 'Agachamento Sumô no Step com Halter',
+              variantId: 'glute-2-sumo',
+              equipmentType: 'sumo_step_squat',
+              animationKey: 'sumoSquatStep',
+              animationStatus: 'verified',
               description: 'Pés bem afastados sobre dois steps, descendo o halter até o meio.'
             }
           ]
@@ -756,10 +953,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Dar passos muito curtos deixando o joelho da frente passar excessivamente da ponta dos pés.',
           proTip: 'A leve inclinação do tronco para a frente transfere o foco de tensão diretamente para o glúteo.'
         },
-        animationKey: 'bulgarian'
+        animationKey: 'bulgarianSplitSquat'
       },
       {
         id: 'glute-3',
+        activeVariantId: 'glute-3-machine',
         name: 'Cadeira Abdutora (Tronco Inclinado)',
         targetMuscle: 'Glúteo Médio e Mínimo',
         secondaryMuscles: ['Tensor da Fáscia Lata'],
@@ -774,12 +972,20 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Cadeira Abdutora de Placas',
+            variantId: 'glute-3-machine',
+            equipmentType: 'seated_abductor_chair',
+            animationKey: 'seatedAbductorMachine',
+            animationStatus: 'verified',
             description: 'Aparelho sentado com apoios almofadados nas laterais externas dos joelhos.',
             settingTips: 'Ajuste a alavanca para começar com as pernas o mais fechadas possível para amplitude total.'
           },
           alternatives: [
             {
               name: 'Abdução de Quadril na Polia Baixa',
+              variantId: 'glute-3-cable',
+              equipmentType: 'cable_standing_abduction',
+              animationKey: 'cableStandingAbduction',
+              animationStatus: 'verified',
               description: 'Cabo baixo com tornozeleira em pé.'
             }
           ]
@@ -791,7 +997,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Empurrar com a ponta dos pés em vez de fazer força nos joelhos.',
           proTip: 'Inclinar o tronco à frente alonga o glúteo médio e ativa muito mais a lateral do bumbum.'
         },
-        animationKey: 'abductor'
+        animationKey: 'seatedAbductorMachine'
       }
     ]
   },
@@ -814,6 +1020,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
     exercises: [
       {
         id: 'chest-1',
+        activeVariantId: 'chest-1-barbell',
         name: 'Supino Reto (Barra ou Halteres)',
         targetMuscle: 'Peitoral Maior (Porção Média/Geral)',
         secondaryMuscles: ['Tríceps', 'Deltoide Anterior'],
@@ -828,16 +1035,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Banco de Supino Reto com Barra Olímpica',
+            variantId: 'chest-1-barbell',
+            equipmentType: 'flat_barbell_bench',
+            animationKey: 'benchPressBarbell',
+            animationStatus: 'verified',
             description: 'Banco clássico com suportes verticais de barra.',
             settingTips: 'Deite de modo que seus olhos fiquem alinhados logo abaixo da barra guardada.'
           },
           alternatives: [
             {
               name: 'Supino Reto com Halteres',
+              variantId: 'chest-1-dumbbells',
+              equipmentType: 'flat_bench_dumbbells',
+              animationKey: 'benchPressDumbbell',
+              animationStatus: 'verified',
               description: 'Permite maior amplitude de descida e protege os ombros.'
             },
             {
               name: 'Supino Máquina Articulada',
+              variantId: 'chest-1-machine',
+              equipmentType: 'seated_chest_press_machine',
+              animationKey: 'chestPressMachine',
+              animationStatus: 'verified',
               description: 'Trajetória fixa sem risco da barra prender no peito.'
             }
           ]
@@ -849,10 +1068,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Bater a barra com força no peito para pegar impulso de rebote.',
           proTip: 'Não aponte os cotovelos a 90° como um T; mantenha-os a 45° ou 60° em relação ao tronco.'
         },
-        animationKey: 'benchpress'
+        animationKey: 'benchPressBarbell'
       },
       {
         id: 'chest-2',
+        activeVariantId: 'chest-2-dumbbells',
         name: 'Supino Inclinado com Halteres',
         targetMuscle: 'Peitoral Superior (Clavicular)',
         secondaryMuscles: ['Deltoide Anterior', 'Tríceps'],
@@ -867,12 +1087,20 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Banco Inclinado a 30° ou 45° + Halteres',
+            variantId: 'chest-2-dumbbells',
+            equipmentType: 'incline_chest_bench',
+            animationKey: 'inclineBenchDumbbell',
+            animationStatus: 'verified',
             description: 'Banco com inclinação regulada para focar na parte de cima do peito.',
             settingTips: 'A inclinação ideal é de 30° a 40° para não roubar o trabalho para os ombros.'
           },
           alternatives: [
             {
               name: 'Supino Inclinado no Smith Machine',
+              variantId: 'chest-2-smith',
+              equipmentType: 'incline_smith_bench',
+              animationKey: 'inclineBenchSmith',
+              animationStatus: 'verified',
               description: 'Mais estabilidade para focar no músculo com cargas progressivas.'
             }
           ]
@@ -884,10 +1112,11 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Inclinar o banco em 60° (vira treino de ombro em vez de peito superior).',
           proTip: 'No topo, concentre-se em espremer a parte superior do peito junta.'
         },
-        animationKey: 'inclineBench'
+        animationKey: 'inclineBenchDumbbell'
       },
       {
         id: 'chest-3',
+        activeVariantId: 'chest-3-peck-deck',
         name: 'Crucifixo / Peck Deck (Voador)',
         targetMuscle: 'Isolamento de Peitoral',
         secondaryMuscles: ['Deltoide Anterior'],
@@ -902,16 +1131,28 @@ export const WORKOUT_DAYS: DayWorkout[] = [
         machines: {
           primary: {
             name: 'Máquina Peck Deck (Voador Peitoral)',
+            variantId: 'chest-3-peck-deck',
+            equipmentType: 'peck_deck_fly_machine',
+            animationKey: 'peckDeckFly',
+            animationStatus: 'verified',
             description: 'Aparelho sentado com braços alavancados e pegadores confortáveis.',
             settingTips: 'Ajuste a altura do banco para que as manoplas fiquem na linha média do peito.'
           },
           alternatives: [
             {
               name: 'Cross Over na Polia Média',
+              variantId: 'chest-3-crossover',
+              equipmentType: 'cable_crossover_towers',
+              animationKey: 'cableCrossOver',
+              animationStatus: 'verified',
               description: 'Cabos trazendo os braços em abraço à frente do corpo.'
             },
             {
               name: 'Crucifixo Reto com Halteres',
+              variantId: 'chest-3-dumbbells',
+              equipmentType: 'flat_bench_fly_dumbbells',
+              animationKey: 'dumbbellFlatFly',
+              animationStatus: 'verified',
               description: 'Deitado no banco reto abrindo os braços com cotovelos semiflexionados.'
             }
           ]
@@ -923,7 +1164,7 @@ export const WORKOUT_DAYS: DayWorkout[] = [
           commonMistake: 'Esticar os braços 100% sobrecarregando a articulação do cotovelo.',
           proTip: 'Sinta o peitoral se esticar na fase aberta antes de começar a fechar.'
         },
-        animationKey: 'fly'
+        animationKey: 'peckDeckFly'
       }
     ]
   }

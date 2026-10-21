@@ -29,6 +29,7 @@ import {
   BIOMETRICS_EVENT,
   UnifiedBiometrics
 } from '@/lib/biometrics';
+import { getVariantRegistryItem } from '@/lib/animation-registry';
 import { Dumbbell, Shield, LogOut, Watch, Lock } from 'lucide-react';
 
 interface SavedSetState {
@@ -231,34 +232,57 @@ export default function Home() {
     });
   };
 
-  const handleSwapExercise = (targetAltName: string) => {
+  const handleSwapExercise = (targetIdentifier: string) => {
     if (!selectedExercise) return;
+    const targetEx = selectedExercise;
+    const altItem = targetEx.machines.alternatives.find(
+      (a) => a.variantId === targetIdentifier || a.name === targetIdentifier
+    );
+    if (!altItem) return;
+
+    const previousPrimary = targetEx.machines.primary;
+    const newAlternatives = [
+      ...targetEx.machines.alternatives.filter(
+        (a) => a !== altItem && a.variantId !== targetIdentifier && a.name !== targetIdentifier
+      ),
+      { ...previousPrimary }
+    ];
+
+    const newVariantId = altItem.variantId || altItem.animationKey || `${targetEx.id}-alt`;
+    const newAnimationKey = altItem.animationKey || targetEx.animationKey;
+    const newName = altItem.name;
+    const registryItem = getVariantRegistryItem(newVariantId);
+
+    const updatedExercise: Exercise = {
+      ...targetEx,
+      name: newName,
+      activeVariantId: newVariantId,
+      animationKey: newAnimationKey,
+      machines: {
+        primary: {
+          ...altItem,
+          variantId: newVariantId,
+          name: altItem.name,
+          description: altItem.description,
+          settingTips: altItem.settingTips || previousPrimary.settingTips,
+          animationKey: newAnimationKey,
+          animationStatus: altItem.animationStatus || 'verified'
+        },
+        alternatives: newAlternatives
+      },
+      biomechanics: registryItem ? {
+        ...targetEx.biomechanics,
+        setup: registryItem.settingTips || targetEx.biomechanics.setup,
+        execution: registryItem.description || targetEx.biomechanics.execution
+      } : targetEx.biomechanics
+    };
+
+    setSelectedExercise(updatedExercise);
+
     setWorkouts((prevWorkouts) => {
       return prevWorkouts.map((day) => ({
         ...day,
-        exercises: day.exercises.map((ex) => {
-          if (ex.id !== selectedExercise.id) return ex;
-          const altItem = ex.machines.alternatives.find((a) => a.name === targetAltName);
-          const previousPrimary = ex.machines.primary;
-          const newAlternatives = [
-            ...ex.machines.alternatives.filter((a) => a.name !== targetAltName),
-            { name: previousPrimary.name, description: previousPrimary.description }
-          ];
-          const updated: Exercise = {
-            ...ex,
-            name: targetAltName,
-            machines: {
-              primary: {
-                name: targetAltName,
-                description: altItem?.description || ex.machines.primary.description,
-                settingTips: ex.machines.primary.settingTips
-              },
-              alternatives: newAlternatives
-            }
-          };
-          setSelectedExercise(updated);
-          return updated;
-        })
+        exercises: day.exercises.map((ex) => (ex.id === targetEx.id ? updatedExercise : ex))
       }));
     });
   };

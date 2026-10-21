@@ -117,9 +117,10 @@ export function ExerciseDetailModal({
           <div className="flex flex-col gap-4 animate-in fade-in duration-200">
             {/* Animação 2D do Movimento */}
             <ExerciseAnimation
-              key={`${exercise.id}-${exercise.animationKey}`}
+              key={`${exercise.id}-${exercise.activeVariantId || exercise.animationKey}`}
               animationKey={exercise.animationKey}
               exerciseName={exercise.name}
+              equipmentName={exercise.machines.primary.name}
               accentColor={accentColor}
             />
 
@@ -205,9 +206,10 @@ export function ExerciseDetailModal({
                   </p>
                   {onSwapExercise && (
                     <button
+                      type="button"
                       onClick={() => {
-                        onSwapExercise(alt.name);
-                        onClose();
+                        onSwapExercise(alt.variantId || alt.name);
+                        setActiveTab('visual');
                       }}
                       className="mt-1 py-1.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white flex items-center justify-center gap-1.5 transition-colors self-start border border-white/10"
                     >
