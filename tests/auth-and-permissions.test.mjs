@@ -30,8 +30,19 @@ import {
   getAuthSecret,
   isValidRole,
   getAuthorizedPartnerId,
-  AuthSecretMissingError
+  AuthSecretMissingError,
+  isAdminKeyConfigured,
+  verifyAdminKey
 } from '../lib/auth-crypto.ts';
+
+import {
+  getFailedLoginAttempts,
+  recordFailedLoginAttempt,
+  resetFailedLoginAttempts,
+  revokeUserSessions,
+  isSessionRevoked,
+  MAX_FAILED_LOGIN_ATTEMPTS
+} from '../lib/cloud-store.ts';
 
 const TEST_SECRET = 'hitfit-test-crypto-secret-key-at-least-32-characters-long-2026';
 
@@ -301,3 +312,102 @@ test('11. Validação de Limites de Integridade de Dados Biométricos', () => {
   assert.strictEqual(isValidWeight(500), false, 'Peso acima de 400 kg deve ser rejeitado');
   assert.strictEqual(isValidWeight('texto-invalido'), false, 'Texto não numérico deve ser rejeitado');
 });
+
+test('12. Proteção da Ativação: Validação de HITFIT_ADMIN_KEY em tempo constante e falha segura', () => {
+  const originalAdminKey = process.env.HITFIT_ADMIN_KEY;
+  const originalSetupSecret = process.env.HITFIT_SETUP_SECRET;
+
+  try {
+    // Caso 1: Chave ausente
+    delete process.env.HITFIT_ADMIN_KEY;
+    delete process.env.HITFIT_SETUP_SECRET;
+    assert.strictEqual(isAdminKeyConfigured(), false, 'Deve retornar false quando HITFIT_ADMIN_KEY não estiver configurada');
+    assert.strictEqual(verifyAdminKey('qualquer-coisa'), false, 'Não deve validar nenhuma chave se não configurada no servidor');
+
+    // Caso 2: Chave curta demais (< 16 caracteres)
+    process.env.HITFIT_ADMIN_KEY = 'curta-123';
+    assert.strictEqual(isAdminKeyConfigured(), false, 'Deve retornar false para chave com menos de 16 caracteres');
+    assert.strictEqual(verifyAdminKey('curta-123'), false, 'Deve rejeitar chave curta');
+
+    // Caso 3: Chave válida configurada (>= 16 caracteres)
+    const validKey = 'hitfit_admin_secret_key_prod_2026';
+    process.env.HITFIT_ADMIN_KEY = validKey;
+    assert.strictEqual(isAdminKeyConfigured(), true, 'Deve retornar true para chave válida com >= 16 caracteres');
+    assert.strictEqual(verifyAdminKey(validKey), true, 'Deve aprovar a chave correta');
+    assert.strictEqual(verifyAdminKey('chave-incorreta-de-teste-1234'), false, 'Deve rejeitar chave incorreta');
+    assert.strictEqual(verifyAdminKey(''), false, 'Deve rejeitar string vazia');
+    assert.strictEqual(verifyAdminKey(null), false, 'Deve rejeitar nulo');
+  } finally {
+    if (originalAdminKey) process.env.HITFIT_ADMIN_KEY = originalAdminKey;
+    else delete process.env.HITFIT_ADMIN_KEY;
+    if (originalSetupSecret) process.env.HITFIT_SETUP_SECRET = originalSetupSecret;
+    else delete process.env.HITFIT_SETUP_SECRET;
+  }
+});
+
+test('13. Proteção contra Força Bruta (Rate Limiting): Bloqueio após 5 tentativas falhas e reset no sucesso', async () => {
+  const testUserId = 'test-athlete-' + Date.now();
+  const testIp = '192.168.1.100';
+
+  // Inicialmente sem bloqueio
+  const initialStatus = await getFailedLoginAttempts(testUserId, testIp);
+  assert.strictEqual(initialStatus.blocked, false, 'Inicialmente não deve estar bloqueado');
+  assert.strictEqual(initialStatus.attempts, 0);
+
+  // Registra 4 tentativas falhas (ainda não bloqueia)
+  for (let i = 1; i <= 4; i++) {
+    const count = await recordFailedLoginAttempt(testUserId, testIp);
+    assert.strictEqual(count, i, `Tentativa falha ${i} deve ser registrada`);
+  }
+
+  const beforeLimit = await getFailedLoginAttempts(testUserId, testIp);
+  assert.strictEqual(beforeLimit.blocked, false, 'Com 4 tentativas ainda não deve bloquear');
+  assert.strictEqual(beforeLimit.attempts, 4);
+
+  // 5ª tentativa falha atinge o limite
+  const count5 = await recordFailedLoginAttempt(testUserId, testIp);
+  assert.strictEqual(count5, MAX_FAILED_LOGIN_ATTEMPTS);
+
+  const blockedStatus = await getFailedLoginAttempts(testUserId, testIp);
+  assert.strictEqual(blockedStatus.blocked, true, 'Ao atingir 5 tentativas deve retornar blocked = true');
+  assert.strictEqual(blockedStatus.attempts, 5);
+  assert.ok(blockedStatus.retryAfterSeconds > 0, 'Deve informar tempo restante de bloqueio');
+
+  // Sucesso no login: reseta o contador
+  await resetFailedLoginAttempts(testUserId, testIp);
+  const unblockedStatus = await getFailedLoginAttempts(testUserId, testIp);
+  assert.strictEqual(unblockedStatus.blocked, false, 'Após reset deve estar desbloqueado');
+  assert.strictEqual(unblockedStatus.attempts, 0);
+});
+
+test('14. Revogação e Invalidação de Sessões: Invalidação de tokens anteriores ao timestamp de revogação', async () => {
+  const athleteId = 'person-rangel';
+  const now = Date.now();
+
+  // Token emitido há 5 minutos
+  const pastTokenIat = now - 5 * 60 * 1000;
+  assert.strictEqual(
+    await isSessionRevoked(athleteId, pastTokenIat),
+    false,
+    'Antes de qualquer revogação, o token não deve estar revogado'
+  );
+
+  // Executa revogação global de sessões
+  await revokeUserSessions(athleteId);
+
+  // Token emitido no passado DEVE estar revogado
+  assert.strictEqual(
+    await isSessionRevoked(athleteId, pastTokenIat),
+    true,
+    'Token emitido antes da revogação deve ser considerado revogado'
+  );
+
+  // Novo token emitido DEPOIS da revogação (+ 1 segundo) NÃO deve estar revogado
+  const futureTokenIat = Date.now() + 1000;
+  assert.strictEqual(
+    await isSessionRevoked(athleteId, futureTokenIat),
+    false,
+    'Novo token emitido após a revogação deve ser válido'
+  );
+});
+

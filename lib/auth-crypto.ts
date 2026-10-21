@@ -62,6 +62,35 @@ export function getAuthorizedPartnerId(userId: string): string | null {
   return null;
 }
 
+const MIN_ADMIN_KEY_LENGTH = 16;
+
+/**
+ * Retorna true se a chave administrativa do proprietário estiver configurada no servidor
+ */
+export function isAdminKeyConfigured(): boolean {
+  const adminKey = process.env.HITFIT_ADMIN_KEY || process.env.HITFIT_SETUP_SECRET;
+  return Boolean(adminKey && adminKey.trim().length >= MIN_ADMIN_KEY_LENGTH);
+}
+
+/**
+ * Valida a chave administrativa do proprietário em tempo constante
+ */
+export function verifyAdminKey(providedKey: string): boolean {
+  const adminKey = process.env.HITFIT_ADMIN_KEY || process.env.HITFIT_SETUP_SECRET;
+  if (!adminKey || adminKey.trim().length < MIN_ADMIN_KEY_LENGTH) return false;
+  if (!providedKey || typeof providedKey !== 'string') return false;
+
+  const cleanProvided = providedKey.trim();
+  const cleanAdmin = adminKey.trim();
+  if (cleanProvided.length !== cleanAdmin.length) return false;
+
+  let diff = 0;
+  for (let i = 0; i < cleanAdmin.length; i++) {
+    diff |= cleanProvided.charCodeAt(i) ^ cleanAdmin.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 /**
  * Converte ArrayBuffer para string hexadecimal
  */

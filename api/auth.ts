@@ -6,6 +6,8 @@ import {
   verifySessionToken,
   calculateAge,
   isAuthSecretConfigured,
+  isAdminKeyConfigured,
+  verifyAdminKey,
   canModifyAthleteData,
   AllowedRole
 } from '../lib/auth-crypto';
@@ -17,6 +19,11 @@ import {
   saveAthleteData,
   getAthleteData,
   isCloudConfigured,
+  getFailedLoginAttempts,
+  recordFailedLoginAttempt,
+  resetFailedLoginAttempts,
+  revokeUserSessions,
+  isSessionRevoked,
   StoredUserAccount
 } from '../lib/cloud-store';
 
@@ -28,7 +35,7 @@ const corsHeaders = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Key'
 };
 
 function jsonResponse(status: number, data: unknown) {
@@ -59,8 +66,8 @@ export default async function handler(req: Request) {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       const session = await verifySessionToken(token);
-      if (!session) {
-        return jsonResponse(401, { error: 'Sessão inválida ou expirada.', valid: false });
+      if (!session || (await isSessionRevoked(session.userId, session.iat))) {
+        return jsonResponse(401, { error: 'Sessão inválida, expirada ou revogada.', valid: false });
       }
 
       const user = await getUserAccount(session.userId);
@@ -149,15 +156,39 @@ export default async function handler(req: Request) {
   // ==========================================
   // AÇÃO 1: CONFIGURAÇÃO INICIAL DO PIN (ETAPA ADMINISTRATIVA SEGURA)
   // Define o PIN inicial de 6 dígitos para as duas contas definitivas.
-  // Uma vez inicializado, o endpoint é permanentemente bloqueado contra reconfiguração pública.
+  // EXIGE estritamente a chave administrativa do proprietário (HITFIT_ADMIN_KEY).
+  // Se uma conta já existir, NÃO a sobrescreve, preservando credenciais existentes.
   // ==========================================
   if (action === 'setup_pins') {
+    // 1. Autorização Administrativa Estrita (somente proprietário com HITFIT_ADMIN_KEY)
+    if (!isAdminKeyConfigured()) {
+      return jsonResponse(503, {
+        error: 'A chave administrativa do proprietário (HITFIT_ADMIN_KEY) não está configurada no servidor. Configure HITFIT_ADMIN_KEY no painel da Vercel para autorizar o provisionamento inicial.',
+        code: 'ADMIN_KEY_NOT_CONFIGURED'
+      });
+    }
+
+    const providedAdminKey = (
+      req.headers.get('x-admin-key') ||
+      (typeof body.adminKey === 'string' ? body.adminKey : '') ||
+      (req.headers.get('authorization')?.startsWith('Bearer ')
+        ? req.headers.get('authorization')!.slice(7)
+        : '')
+    ).trim();
+
+    if (!verifyAdminKey(providedAdminKey)) {
+      return jsonResponse(401, {
+        error: 'Chave administrativa não autorizada. O provisionamento inicial de PINs só pode ser realizado pelo proprietário com a chave administrativa correta.',
+        code: 'UNAUTHORIZED_ADMIN'
+      });
+    }
+
     const existingRangel = await getUserAccount('person-rangel');
     const existingJack = await getUserAccount('person-geicsania');
 
     if (existingRangel && existingJack) {
       return jsonResponse(409, {
-        error: 'O sistema já foi inicializado anteriormente. Utilize a tela de login.',
+        error: 'O sistema já foi inicializado anteriormente. Ambas as contas já existem. Para redefinir o PIN, realize a alteração autenticada na aba Perfil.',
         code: 'SYSTEM_ALREADY_INITIALIZED'
       });
     }
@@ -181,54 +212,47 @@ export default async function handler(req: Request) {
 
     const now = new Date().toISOString();
 
-    // Gera hashes independentes com salts distintos para Rangel e Jack
-    const saltRangel = generateSalt(16);
-    const hashRangel = await hashPassword(pin, saltRangel);
-
-    const saltJack = generateSalt(16);
-    const hashJack = await hashPassword(pin, saltJack);
-
-    const accountRangel: StoredUserAccount = {
-      id: 'person-rangel',
-      username: 'rangel',
-      name: 'Rangel',
-      birthDate: '',
-      age: 0,
-      initialWeightKg: null,
-      heightCm: null,
-      goal: 'Emagrecimento & Definição',
-      activityLevel: 'Moderado (3-4x por semana)',
-      salt: saltRangel,
-      passwordHash: hashRangel,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    const accountJack: StoredUserAccount = {
-      id: 'person-geicsania',
-      username: 'jack',
-      name: 'Jack',
-      birthDate: '',
-      age: 0,
-      initialWeightKg: null,
-      heightCm: null,
-      goal: 'Recomposição Corporal',
-      activityLevel: 'Moderado (3-4x por semana)',
-      salt: saltJack,
-      passwordHash: hashJack,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    if (existingRangel) {
-      await updateUserAccount(accountRangel);
-    } else {
+    // Se Rangel ainda não foi criado, cria agora de forma atômica
+    if (!existingRangel) {
+      const saltRangel = generateSalt(16);
+      const hashRangel = await hashPassword(pin, saltRangel);
+      const accountRangel: StoredUserAccount = {
+        id: 'person-rangel',
+        username: 'rangel',
+        name: 'Rangel',
+        birthDate: '',
+        age: 0,
+        initialWeightKg: null,
+        heightCm: null,
+        goal: 'Emagrecimento & Definição',
+        activityLevel: 'Moderado (3-4x por semana)',
+        salt: saltRangel,
+        passwordHash: hashRangel,
+        createdAt: now,
+        updatedAt: now
+      };
       await createAtomicUserAccount(accountRangel);
     }
 
-    if (existingJack) {
-      await updateUserAccount(accountJack);
-    } else {
+    // Se Jack ainda não foi criada, cria agora de forma atômica
+    if (!existingJack) {
+      const saltJack = generateSalt(16);
+      const hashJack = await hashPassword(pin, saltJack);
+      const accountJack: StoredUserAccount = {
+        id: 'person-geicsania',
+        username: 'jack',
+        name: 'Jack',
+        birthDate: '',
+        age: 0,
+        initialWeightKg: null,
+        heightCm: null,
+        goal: 'Recomposição Corporal',
+        activityLevel: 'Moderado (3-4x por semana)',
+        salt: saltJack,
+        passwordHash: hashJack,
+        createdAt: now,
+        updatedAt: now
+      };
       await createAtomicUserAccount(accountJack);
     }
 
@@ -270,7 +294,8 @@ export default async function handler(req: Request) {
   }
 
   // ==========================================
-  // AÇÃO 2: LOGIN COM PIN DE 6 DÍGITOS
+  // AÇÃO 2: LOGIN COM PIN DE 6 DÍGITOS E RATE LIMITING
+  // Proteção contra brute-force por conta e por IP (max 5 tentativas em 15 min -> 429)
   // ==========================================
   if (action === 'login') {
     const { usernameOrRole, password } = body;
@@ -288,6 +313,32 @@ export default async function handler(req: Request) {
       return jsonResponse(400, { error: 'Perfil de atleta não reconhecido.', code: 'INVALID_ROLE' });
     }
 
+    // Extrai o IP do cliente (Edge / Vercel headers)
+    const clientIp = (
+      req.headers.get('x-forwarded-for')?.split(',')[0] ||
+      req.headers.get('x-real-ip') ||
+      '127.0.0.1'
+    ).trim();
+
+    // 1. Verificação de Limitação de Tentativas (Rate Limiting)
+    const rateLimit = await getFailedLoginAttempts(targetId, clientIp);
+    if (rateLimit.blocked) {
+      return new Response(
+        JSON.stringify({
+          error: `Muitas tentativas incorretas. Acesso temporariamente bloqueado por segurança. Tente novamente em ${Math.ceil(rateLimit.retryAfterSeconds / 60)} minutos.`,
+          code: 'TOO_MANY_ATTEMPTS',
+          retryAfter: rateLimit.retryAfterSeconds
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Retry-After': String(rateLimit.retryAfterSeconds)
+          }
+        }
+      );
+    }
+
     const user = await getUserAccount(targetId);
     if (!user) {
       return jsonResponse(404, {
@@ -298,11 +349,16 @@ export default async function handler(req: Request) {
 
     const isMatch = await verifyPassword(password.trim(), user.salt, user.passwordHash);
     if (!isMatch) {
+      // Registra a tentativa falha para conta e IP
+      await recordFailedLoginAttempt(targetId, clientIp);
       return jsonResponse(401, {
         error: 'PIN incorreto. Verifique os 6 dígitos digitados.',
         code: 'INVALID_PASSWORD'
       });
     }
+
+    // Sucesso no login: reseta o histórico de falhas da conta e do IP
+    await resetFailedLoginAttempts(targetId, clientIp);
 
     const assignedRole: AllowedRole = user.id === 'person-rangel' ? 'rangel' : 'jack';
     const token = await createSessionToken({
@@ -346,8 +402,8 @@ export default async function handler(req: Request) {
 
     const token = authHeader.substring(7);
     const session = await verifySessionToken(token);
-    if (!session) {
-      return jsonResponse(401, { error: 'Sessão inválida ou expirada.', code: 'SESSION_EXPIRED' });
+    if (!session || (await isSessionRevoked(session.userId, session.iat))) {
+      return jsonResponse(401, { error: 'Sessão inválida, expirada ou revogada.', code: 'SESSION_EXPIRED' });
     }
 
     const targetUserId = (body.userId as string) || session.userId;
@@ -454,8 +510,8 @@ export default async function handler(req: Request) {
 
     const token = authHeader.substring(7);
     const session = await verifySessionToken(token);
-    if (!session) {
-      return jsonResponse(401, { error: 'Sessão inválida ou expirada.', code: 'SESSION_EXPIRED' });
+    if (!session || (await isSessionRevoked(session.userId, session.iat))) {
+      return jsonResponse(401, { error: 'Sessão inválida, expirada ou revogada.', code: 'SESSION_EXPIRED' });
     }
 
     const { currentPassword, newPassword } = body;
@@ -485,7 +541,25 @@ export default async function handler(req: Request) {
 
     await updateUserAccount(updatedUser);
 
+    // Invalida sessões anteriores após a troca de PIN
+    await revokeUserSessions(session.userId);
+
     return jsonResponse(200, { success: true, message: 'PIN individual atualizado com sucesso.' });
+  }
+
+  // ==========================================
+  // AÇÃO 5: REVOGAÇÃO DE SESSÕES / LOGOUT GLOBAL
+  // ==========================================
+  if (action === 'revoke_sessions' || action === 'logout') {
+    const authHeader = req.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const session = await verifySessionToken(token);
+      if (session) {
+        await revokeUserSessions(session.userId);
+      }
+    }
+    return jsonResponse(200, { success: true, message: 'Sessão revogada com sucesso.' });
   }
 
   return jsonResponse(400, { error: 'Ação não reconhecida.', code: 'UNKNOWN_ACTION' });

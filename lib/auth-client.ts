@@ -100,17 +100,21 @@ export async function checkSetupStatus(): Promise<SetupStatusResponse> {
 }
 
 /**
- * Configura o PIN inicial de 6 dígitos para Rangel e Jack (etapa administrativa segura do proprietário)
+ * Configura o PIN inicial de 6 dígitos para Rangel e Jack (etapa administrativa restrita ao proprietário)
  */
 export async function setupInitialPins(
   pin: string,
-  confirmPin: string
+  confirmPin: string,
+  adminKey: string
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     const res = await fetch('/api/auth', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'setup_pins', pin, confirmPin })
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminKey.trim()
+      },
+      body: JSON.stringify({ action: 'setup_pins', pin, confirmPin, adminKey: adminKey.trim() })
     });
 
     const data = (await res.json()) as { success?: boolean; message?: string; error?: string };
@@ -204,6 +208,29 @@ export async function updateAthleteProfile(payload: {
 export function logoutAthlete(): void {
   setStoredToken(null);
   setStoredUser(null);
+}
+
+/**
+ * Revoga todas as sessões anteriores no servidor e encerra localmente
+ */
+export async function revokeAllSessions(): Promise<boolean> {
+  const token = getStoredToken();
+  if (token) {
+    try {
+      await fetch('/api/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'revoke_sessions' })
+      });
+    } catch {
+      // Falha offline ignorada
+    }
+  }
+  logoutAthlete();
+  return true;
 }
 
 /**
