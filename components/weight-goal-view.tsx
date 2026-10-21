@@ -26,7 +26,7 @@ export function WeightGoalView({
   currentWeightKg,
   isReadOnly = false
 }: WeightGoalViewProps) {
-  const isGeic = athleteName.toLowerCase().includes('geic');
+  const isJack = athleteName.toLowerCase().includes('jack') || athleteName.toLowerCase().includes('geic') || profileId === 'person-geicsania';
 
   const [goal, setGoal] = useState<WeightGoalData>(() => {
     if (typeof window !== 'undefined') {
@@ -38,7 +38,7 @@ export function WeightGoalView({
     return {
       initialWeightKg: null,
       targetWeightKg: null,
-      objective: isGeic ? 'recomp' : 'fat_loss',
+      objective: isJack ? 'recomp' : 'fat_loss',
       updatedAt: new Date().toISOString()
     };
   });

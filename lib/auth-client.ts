@@ -5,14 +5,16 @@
 
 export interface AuthenticatedUser {
   id: string; // 'person-rangel' | 'person-geicsania'
-  username: 'rangel' | 'geicsania';
-  name: string;
+  username: 'rangel' | 'jack' | 'geicsania';
+  name: string; // 'Rangel' | 'Jack'
+  role: 'rangel' | 'jack' | 'geicsania';
   age: number;
   birthDate?: string;
   initialWeightKg: number | null;
   heightCm: number | null;
   goal: string;
   activityLevel: string;
+  needsProfileSetup?: boolean;
 }
 
 interface AuthResponse {
@@ -21,6 +23,18 @@ interface AuthResponse {
   token?: string;
   user?: AuthenticatedUser;
   valid?: boolean;
+}
+
+export interface SetupStatusResponse {
+  cloudConnected: boolean;
+  isSetupNeeded: boolean;
+  accounts?: Array<{
+    id: string;
+    username: string;
+    name: string;
+    hasAccount: boolean;
+  }>;
+  error?: string;
 }
 
 const TOKEN_KEY = 'hitfit_auth_token_v2';
@@ -60,66 +74,127 @@ export function setStoredUser(user: AuthenticatedUser | null): void {
 }
 
 /**
- * Realiza cadastro inicial seguro via /api/auth
+ * Consulta o status do sistema (banco conectado e se o setup de PIN inicial é necessário)
  */
-export async function registerAthlete(payload: {
-  role: 'rangel' | 'geicsania';
-  name: string;
-  birthDate: string;
-  initialWeightKg: number | null;
-  heightCm: number | null;
-  goal: string;
-  activityLevel: string;
-  password: string;
-  avatarBase64?: string | null;
-}): Promise<{ success: boolean; user?: AuthenticatedUser; error?: string }> {
+export async function checkSetupStatus(): Promise<SetupStatusResponse> {
   try {
     const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'register', ...payload })
+      method: 'GET'
     });
-
-    const data = (await res.json()) as AuthResponse;
-    if (!res.ok || !data.success) {
-      return { success: false, error: data.error || 'Falha no cadastro' };
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return {
+        cloudConnected: false,
+        isSetupNeeded: false,
+        error: (errData as { error?: string }).error || `HTTP ${res.status}`
+      };
     }
-
-    if (data.token) setStoredToken(data.token);
-    if (data.user) setStoredUser(data.user);
-    return { success: true, user: data.user };
-  } catch (err: unknown) {
-    // Fallback local se estiver offline
-    const errMsg = err instanceof Error ? err.message : 'Falha na conexão com o servidor';
-    return { success: false, error: errMsg };
+    return (await res.json()) as SetupStatusResponse;
+  } catch (err) {
+    return {
+      cloudConnected: false,
+      isSetupNeeded: false,
+      error: err instanceof Error ? err.message : 'Falha ao conectar com o servidor'
+    };
   }
 }
 
 /**
- * Realiza login com senha individual via /api/auth
+ * Configura o PIN inicial de 6 dígitos para Rangel e Jack (etapa administrativa segura do proprietário)
+ */
+export async function setupInitialPins(
+  pin: string,
+  confirmPin: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'setup_pins', pin, confirmPin })
+    });
+
+    const data = (await res.json()) as { success?: boolean; message?: string; error?: string };
+    if (!res.ok || !data.success) {
+      return { success: false, error: data.error || 'Falha ao configurar PIN inicial.' };
+    }
+
+    return { success: true, message: data.message };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Falha na conexão com o servidor.'
+    };
+  }
+}
+
+/**
+ * Realiza login com PIN de 6 dígitos via /api/auth
  */
 export async function loginAthlete(
   usernameOrRole: string,
-  password: string
+  pin: string
 ): Promise<{ success: boolean; user?: AuthenticatedUser; error?: string }> {
   try {
     const res = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'login', usernameOrRole, password })
+      body: JSON.stringify({ action: 'login', usernameOrRole, password: pin })
     });
 
     const data = (await res.json()) as AuthResponse;
     if (!res.ok || !data.success) {
-      return { success: false, error: data.error || 'Senha incorreta ou usuário não encontrado' };
+      return { success: false, error: data.error || 'PIN incorreto ou usuário não encontrado.' };
     }
 
     if (data.token) setStoredToken(data.token);
     if (data.user) setStoredUser(data.user);
     return { success: true, user: data.user };
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : 'Falha de conexão com o servidor';
+    const errMsg = err instanceof Error ? err.message : 'Falha de conexão com o servidor.';
     return { success: false, error: errMsg };
+  }
+}
+
+/**
+ * Atualiza os dados biométricos individuais no primeiro acesso após login
+ */
+export async function updateAthleteProfile(payload: {
+  userId: string;
+  birthDate: string;
+  initialWeightKg: number | null;
+  heightCm: number | null;
+  targetWeightKg?: number | null;
+  goal: string;
+  activityLevel: string;
+  avatarBase64?: string | null;
+}): Promise<{ success: boolean; user?: AuthenticatedUser; error?: string }> {
+  const token = getStoredToken();
+  if (!token) return { success: false, error: 'Sessão não autenticada.' };
+
+  try {
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ action: 'update_profile', ...payload })
+    });
+
+    const data = (await res.json()) as AuthResponse;
+    if (!res.ok || !data.success) {
+      return { success: false, error: data.error || 'Falha ao atualizar perfil.' };
+    }
+
+    if (data.user) {
+      setStoredUser(data.user);
+    }
+    return { success: true, user: data.user };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Falha ao salvar dados de perfil.'
+    };
   }
 }
 

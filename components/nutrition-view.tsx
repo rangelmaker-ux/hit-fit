@@ -36,7 +36,7 @@ export function NutritionView({
   todayWorkoutCaloriesBurned = 0,
   isReadOnly = false
 }: NutritionViewProps) {
-  const isGeic = profileName.toLowerCase().includes('geic');
+  const isJack = profileName.toLowerCase().includes('jack') || profileName.toLowerCase().includes('geic') || profileId === 'person-geicsania';
 
   // Carrega ou inicializa perfil biométrico
   const [profile, setProfile] = useState<UserBioProfile>(() => {
@@ -48,12 +48,12 @@ export function NutritionView({
     }
     return DEFAULT_PROFILES[profileName] || {
       name: profileName,
-      gender: isGeic ? 'female' : 'male',
+      gender: isJack ? 'female' : 'male',
       weightKg: 0,
       heightCm: 0,
       age: 0,
       targetWeightKg: 0,
-      goal: isGeic ? 'recomp' : 'fat_loss',
+      goal: isJack ? 'recomp' : 'fat_loss',
       activityFactor: 1.55,
       customDailyDeficit: 400,
       waterGoalMl: 2500

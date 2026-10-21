@@ -38,7 +38,7 @@ export function ProfileView({
   onAvatarUpdated,
   onLogout
 }: ProfileViewProps) {
-  const isGeic = athleteName.toLowerCase().includes('geic');
+  const isJack = athleteName.toLowerCase().includes('jack') || athleteName.toLowerCase().includes('geic') || profileId === 'person-geicsania';
 
   // Foto de Perfil via IndexedDB
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -59,12 +59,12 @@ export function ProfileView({
     }
     return DEFAULT_PROFILES[athleteName] || {
       name: athleteName,
-      gender: isGeic ? 'female' : 'male',
+      gender: isJack ? 'female' : 'male',
       weightKg: 0,
       heightCm: 0,
       age: 0,
       targetWeightKg: 0,
-      goal: isGeic ? 'recomp' : 'fat_loss',
+      goal: isJack ? 'recomp' : 'fat_loss',
       activityFactor: 1.55,
       customDailyDeficit: 400,
       waterGoalMl: 2500

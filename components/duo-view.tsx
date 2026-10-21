@@ -31,7 +31,7 @@ export function DuoView({
 
   // Calcula estatísticas para cada perfil
   const person1 = people[0] || { id: 'person-rangel', name: 'Rangel' };
-  const person2 = people[1] || { id: 'person-geicsania', name: 'Geicsania' };
+  const person2 = people[1] || { id: 'person-geicsania', name: 'Jack' };
 
   const getPersonProgress = (personId: string) => {
     let totalCompletedSets = 0;

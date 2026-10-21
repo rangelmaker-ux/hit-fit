@@ -2,15 +2,16 @@
  * HIT-FIT 2.0 | Suíte de Testes Automatizados de Segurança, Criptografia e Autorização
  * Valida:
  * 1. Proteção de Segredos e Falha Segura (Ausência de HITFIT_AUTH_SECRET dispara erro explícito)
- * 2. Criptografia PBKDF2 e Verificação de Senhas (100.000 iterações + Salt único)
- * 3. Tokens de Sessão com Assinatura HMAC-SHA256 (Criação, validação, adulteração e expiração)
- * 4. Restrição Estrita de Papéis (Roles) e Normalização (apenas rangel e geicsania)
- * 5. Isolamento de Leitura de Parceiro Autorizado (getAuthorizedPartnerId)
- * 6. Regras de Autorização RBAC no Servidor (Rangel vs Geicsania)
- * 7. Cadastro Inicial: Cálculo Automático de Idade
- * 8. Treino Guiado Sequencial: Discriminação real de concluídos vs pulados
- * 9. Prevenção do Bug do Zero nos Inputs Numéricos e Decimais Brasileiros
- * 10. Validação de Limites Biométricos Reais (rejeição de pesos absurdos e avatares gigantes)
+ * 2. Criptografia PBKDF2 e Verificação de Senhas/PINs (100.000 iterações + Salt único)
+ * 3. Tokens de Sessão com Assinatura HMAC-SHA256 para Rangel e Jack
+ * 4. Restrição Estrita de Papéis (Roles) e Normalização (apenas rangel e jack/geicsania)
+ * 5. Isolamento de Leitura de Parceiro Autorizado (getAuthorizedPartnerId: Rangel <-> Jack)
+ * 6. Regras de Autorização RBAC no Servidor (Rangel vs Jack)
+ * 7. Validação do Formato do PIN de 6 dígitos numéricos
+ * 8. Cadastro Inicial: Cálculo Automático de Idade
+ * 9. Treino Guiado Sequencial: Discriminação real de concluídos vs pulados
+ * 10. Prevenção do Bug do Zero nos Inputs Numéricos e Decimais Brasileiros
+ * 11. Validação de Limites Biométricos Reais
  */
 
 import test from 'node:test';
@@ -57,80 +58,92 @@ test('1. Proteção de Segredos: Falha segura quando HITFIT_AUTH_SECRET está au
   process.env.HITFIT_AUTH_SECRET = TEST_SECRET;
   assert.strictEqual(isAuthSecretConfigured(), true, 'Deve validar segredos com >= 32 caracteres');
   assert.strictEqual(getAuthSecret(), TEST_SECRET);
-
-  // Restaura para os demais testes
-  process.env.HITFIT_AUTH_SECRET = TEST_SECRET;
 });
 
-test('2. Criptografia PBKDF2: Geração de salt e hash seguro', async () => {
+test('2. Criptografia PBKDF2: Geração de salt e hash seguro para PIN de 6 dígitos', async () => {
   const salt = generateSalt(16);
   assert.ok(salt, 'Salt deve ser gerado');
   assert.strictEqual(salt.length, 32, 'Salt de 16 bytes em hex deve ter 32 caracteres');
 
-  const password = 'SenhaSecreta@2026';
-  const hash = await hashPassword(password, salt);
+  const pin = '482915'; // Exemplo de PIN numérico de 6 dígitos
+  const hash = await hashPassword(pin, salt);
   assert.ok(hash, 'Hash deve ser gerado com sucesso');
   assert.strictEqual(hash.length, 64, 'Hash SHA-256 deve ter 64 caracteres hexadecimais');
 
-  // Verifica senha correta
-  const isMatch = await verifyPassword(password, salt, hash);
-  assert.strictEqual(isMatch, true, 'Senha correta deve retornar true');
+  // Verifica PIN correto
+  const isMatch = await verifyPassword(pin, salt, hash);
+  assert.strictEqual(isMatch, true, 'PIN correto deve retornar true');
 
-  // Verifica senha incorreta
-  const isWrong = await verifyPassword('SenhaErrada!999', salt, hash);
-  assert.strictEqual(isWrong, false, 'Senha incorreta deve retornar false');
+  // Verifica PIN incorreto
+  const isWrong = await verifyPassword('000000', salt, hash);
+  assert.strictEqual(isWrong, false, 'PIN incorreto deve retornar false');
 });
 
-test('3. Tokens de Sessão HMAC-SHA256: Criação, assinatura e verificação', async () => {
+test('3. Tokens de Sessão HMAC-SHA256: Criação, assinatura e verificação para Rangel e Jack', async () => {
   process.env.HITFIT_AUTH_SECRET = TEST_SECRET;
 
-  const athlete = {
+  // Sessão de Rangel
+  const athleteRangel = {
     id: 'person-rangel',
     name: 'Rangel',
     role: 'rangel'
   };
 
-  const token = await createSessionToken(athlete, 30);
-  assert.ok(token.includes('.'), 'Token deve conter payload e assinatura separados por ponto');
+  const tokenRangel = await createSessionToken(athleteRangel, 30);
+  assert.ok(tokenRangel.includes('.'), 'Token de Rangel deve conter payload e assinatura');
+  const verifiedRangel = await verifySessionToken(tokenRangel);
+  assert.ok(verifiedRangel, 'Token de Rangel deve ser validado');
+  assert.strictEqual(verifiedRangel.userId, 'person-rangel');
+  assert.strictEqual(verifiedRangel.role, 'rangel');
 
-  const verified = await verifySessionToken(token);
-  assert.ok(verified, 'Token válido deve ser verificado com sucesso');
-  assert.strictEqual(verified.userId, 'person-rangel');
-  assert.strictEqual(verified.name, 'Rangel');
-  assert.strictEqual(verified.role, 'rangel');
+  // Sessão de Jack
+  const athleteJack = {
+    id: 'person-geicsania',
+    name: 'Jack',
+    role: 'jack'
+  };
+
+  const tokenJack = await createSessionToken(athleteJack, 30);
+  assert.ok(tokenJack.includes('.'), 'Token de Jack deve conter payload e assinatura');
+  const verifiedJack = await verifySessionToken(tokenJack);
+  assert.ok(verifiedJack, 'Token de Jack deve ser validado');
+  assert.strictEqual(verifiedJack.userId, 'person-geicsania');
+  assert.strictEqual(verifiedJack.role, 'jack');
 
   // Testa rejeição de token adulterado
-  const [, signature] = token.split('.');
-  const tamperedPayload = btoa(encodeURIComponent(JSON.stringify({ userId: 'person-geicsania', role: 'geicsania' })));
+  const [, signature] = tokenJack.split('.');
+  const tamperedPayload = btoa(encodeURIComponent(JSON.stringify({ userId: 'person-rangel', role: 'rangel' })));
   const tamperedToken = `${tamperedPayload}.${signature}`;
 
   const tamperedResult = await verifySessionToken(tamperedToken);
   assert.strictEqual(tamperedResult, null, 'Token adulterado deve ser rejeitado com null');
 
   // Testa rejeição de token expirado (-1 dia de validade)
-  const expiredToken = await createSessionToken(athlete, -1);
+  const expiredToken = await createSessionToken(athleteJack, -1);
   const expiredResult = await verifySessionToken(expiredToken);
   assert.strictEqual(expiredResult, null, 'Token expirado deve ser rejeitado');
 });
 
-test('4. Restrição Estrita de Papéis (Roles) e Normalização', () => {
+test('4. Restrição Estrita de Papéis (Roles) e Normalização (Rangel e Jack)', () => {
   assert.strictEqual(isValidRole('rangel'), true, 'rangel deve ser um papel válido');
-  assert.strictEqual(isValidRole('geicsania'), true, 'geicsania deve ser um papel válido');
+  assert.strictEqual(isValidRole('jack'), true, 'jack deve ser um papel válido');
+  assert.strictEqual(isValidRole('geicsania'), true, 'geicsania (legado) deve ser reconhecido');
   
   // Rejeição de papéis não autorizados
   assert.strictEqual(isValidRole('admin'), false, 'admin deve ser rejeitado');
   assert.strictEqual(isValidRole('root'), false, 'root deve ser rejeitado');
-  assert.strictEqual(isValidRole('anonymous'), false, 'anonymous deve ser rejeitado');
+  assert.strictEqual(isValidRole('visitor'), false, 'visitor deve ser rejeitado');
   assert.strictEqual(isValidRole(''), false, 'string vazia deve ser rejeitada');
 });
 
-test('5. Isolamento de Parceiro Autorizado: getAuthorizedPartnerId', () => {
-  // O único parceiro autorizado de Rangel é Geicsania
+test('5. Isolamento de Parceiro Autorizado: Rangel <-> Jack', () => {
+  // O único parceiro autorizado de Rangel é Jack (person-geicsania)
   assert.strictEqual(getAuthorizedPartnerId('person-rangel'), 'person-geicsania');
   assert.strictEqual(getAuthorizedPartnerId('rangel'), 'person-geicsania');
 
-  // O único parceiro autorizado de Geicsania é Rangel
+  // O único parceiro autorizado de Jack é Rangel
   assert.strictEqual(getAuthorizedPartnerId('person-geicsania'), 'person-rangel');
+  assert.strictEqual(getAuthorizedPartnerId('jack'), 'person-rangel');
   assert.strictEqual(getAuthorizedPartnerId('geicsania'), 'person-rangel');
 
   // Qualquer terceiro ou invasor não possui parceiro autorizado
@@ -139,7 +152,7 @@ test('5. Isolamento de Parceiro Autorizado: getAuthorizedPartnerId', () => {
   assert.strictEqual(getAuthorizedPartnerId(''), null);
 });
 
-test('6. Autorização RBAC Estrita: Proteção contra modificações cruzadas e adulteração de IDs', () => {
+test('6. Autorização RBAC Estrita: Proteção contra modificações cruzadas entre Rangel e Jack', () => {
   // Rangel pode modificar os dados de Rangel
   assert.strictEqual(
     canModifyAthleteData('person-rangel', 'person-rangel'),
@@ -152,25 +165,40 @@ test('6. Autorização RBAC Estrita: Proteção contra modificações cruzadas e
     'Normalização de ID de Rangel deve funcionar'
   );
 
-  // Rangel NÃO pode modificar os dados de Geicsania
+  // Rangel NÃO pode modificar os dados de Jack
   assert.strictEqual(
     canModifyAthleteData('person-rangel', 'person-geicsania'),
     false,
-    'Rangel NÃO deve poder modificar os dados de Geicsania'
+    'Rangel NÃO deve poder modificar os dados de Jack'
+  );
+  assert.strictEqual(
+    canModifyAthleteData('rangel', 'jack'),
+    false,
+    'Rangel NÃO deve poder modificar Jack via alias'
   );
 
-  // Geicsania NÃO pode modificar os dados de Rangel
+  // Jack NÃO pode modificar os dados de Rangel
   assert.strictEqual(
     canModifyAthleteData('person-geicsania', 'person-rangel'),
     false,
-    'Geicsania NÃO deve poder modificar os dados de Rangel'
+    'Jack NÃO deve poder modificar os dados de Rangel'
+  );
+  assert.strictEqual(
+    canModifyAthleteData('jack', 'rangel'),
+    false,
+    'Jack NÃO deve poder modificar Rangel via alias'
   );
 
-  // Geicsania pode modificar os dados de Geicsania
+  // Jack pode modificar os dados de Jack
   assert.strictEqual(
     canModifyAthleteData('person-geicsania', 'person-geicsania'),
     true,
-    'Geicsania deve poder modificar seus próprios dados'
+    'Jack deve poder modificar seus próprios dados'
+  );
+  assert.strictEqual(
+    canModifyAthleteData('jack', 'person-geicsania'),
+    true,
+    'Alias jack deve poder modificar person-geicsania'
   );
 
   // IDs nulos ou vazios devem ser rejeitados
@@ -178,7 +206,18 @@ test('6. Autorização RBAC Estrita: Proteção contra modificações cruzadas e
   assert.strictEqual(canModifyAthleteData('person-rangel', ''), false);
 });
 
-test('7. Cadastro Inicial: Cálculo automático de idade', () => {
+test('7. Validação do Formato de PIN de 6 dígitos numéricos', () => {
+  const isValidPin = (p) => typeof p === 'string' && /^\d{6}$/.test(p.trim());
+
+  assert.strictEqual(isValidPin('123456'), true, 'PIN de 6 dígitos numéricos é válido');
+  assert.strictEqual(isValidPin('000000'), true, 'PIN com zeros é válido');
+  assert.strictEqual(isValidPin('12345'), false, 'PIN de 5 dígitos deve ser rejeitado');
+  assert.strictEqual(isValidPin('1234567'), false, 'PIN de 7 dígitos deve ser rejeitado');
+  assert.strictEqual(isValidPin('abcdef'), false, 'PIN com letras deve ser rejeitado');
+  assert.strictEqual(isValidPin('12 345'), false, 'PIN com espaços deve ser rejeitado');
+});
+
+test('8. Cadastro / Primeiro Acesso: Cálculo automático de idade', () => {
   const currentYear = new Date().getFullYear();
   const birthYear = currentYear - 30;
   
@@ -192,7 +231,7 @@ test('7. Cadastro Inicial: Cálculo automático de idade', () => {
   assert.strictEqual(calculateAge('data-invalida'), 0);
 });
 
-test('8. Treino Guiado Sequencial: Discriminação real de concluídos vs pulados', () => {
+test('9. Treino Guiado Sequencial: Discriminação real de concluídos vs pulados', () => {
   const exercises = [
     { id: 'ex-1', name: 'Agachamento', sets: 4 },
     { id: 'ex-2', name: 'Leg Press', sets: 4 },
@@ -232,8 +271,7 @@ test('8. Treino Guiado Sequencial: Discriminação real de concluídos vs pulado
   assert.strictEqual(skippedList[0].reason, 'Aparelho ou máquina ocupada');
 });
 
-test('9. Validação do Bug do Zero e Decimais Brasileiros no NumericInput', () => {
-  // Função utilitária de parsing usada internamente no NumericInput
+test('10. Validação do Bug do Zero e Decimais Brasileiros no NumericInput', () => {
   const parseNumericValue = (text, allowDecimals) => {
     if (!text || text.trim() === '') return null;
     const normalized = text.replace(',', '.').trim();
@@ -241,24 +279,17 @@ test('9. Validação do Bug do Zero e Decimais Brasileiros no NumericInput', () 
     return isNaN(val) ? null : val;
   };
 
-  // 1. Ao apagar o campo (string vazia), deve retornar null (e NUNCA zero)
   assert.strictEqual(parseNumericValue('', true), null, 'String vazia deve retornar null');
   assert.strictEqual(parseNumericValue('   ', true), null, 'Espaços em branco devem retornar null');
-
-  // 2. Aceitar vírgula decimal brasileira
   assert.strictEqual(parseNumericValue('82,5', true), 82.5, 'Vírgula 82,5 deve ser convertida para 82.5');
   assert.strictEqual(parseNumericValue('64,3', true), 64.3, 'Vírgula 64,3 deve ser convertida para 64.3');
-
-  // 3. Aceitar ponto decimal
   assert.strictEqual(parseNumericValue('82.5', true), 82.5, 'Ponto 82.5 deve ser convertido para 82.5');
-
-  // 4. Aceitar inteiros
   assert.strictEqual(parseNumericValue('178', false), 178, 'Inteiro 178 deve retornar 178');
 });
 
-test('10. Validação de Limites de Integridade de Dados Biométricos', () => {
+test('11. Validação de Limites de Integridade de Dados Biométricos', () => {
   const isValidWeight = (w) => {
-    if (w === null || w === undefined) return true; // permite não informado
+    if (w === null || w === undefined) return true;
     const n = Number(w);
     return !isNaN(n) && n >= 20 && n <= 400;
   };

@@ -12,7 +12,7 @@ const PBKDF2_ITERATIONS = 100_000;
 const HASH_LENGTH = 32; // 256 bits
 const MIN_SECRET_LENGTH = 32;
 
-export const ALLOWED_ROLES = ['rangel', 'geicsania'] as const;
+export const ALLOWED_ROLES = ['rangel', 'jack', 'geicsania'] as const;
 export type AllowedRole = (typeof ALLOWED_ROLES)[number];
 
 export class AuthSecretMissingError extends Error {
@@ -53,12 +53,12 @@ export function isValidRole(role: string): role is AllowedRole {
 
 /**
  * Retorna o identificador do parceiro autorizado único para um dado atleta
- * Rangel <-> Geicsania (nenhum terceiro é aceito)
+ * Rangel <-> Jack / Geicsania (nenhum terceiro é aceito)
  */
 export function getAuthorizedPartnerId(userId: string): string | null {
   const clean = userId.replace(/^person-/, '').toLowerCase().trim();
   if (clean === 'rangel') return 'person-geicsania';
-  if (clean === 'geicsania') return 'person-rangel';
+  if (clean === 'jack' || clean === 'geicsania') return 'person-rangel';
   return null;
 }
 
@@ -239,8 +239,13 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
 export function canModifyAthleteData(authenticatedUserId: string, targetUserId: string): boolean {
   if (!authenticatedUserId || !targetUserId) return false;
   
-  // Normalização de IDs (ex: 'rangel' e 'person-rangel')
-  const normalize = (id: string) => id.replace(/^person-/, '').toLowerCase().trim();
+  // Normalização de IDs (ex: 'rangel' e 'person-rangel', 'jack', 'geicsania' e 'person-geicsania')
+  const normalize = (id: string) => {
+    const clean = id.replace(/^person-/, '').toLowerCase().trim();
+    if (clean === 'jack' || clean === 'geicsania') return 'geicsania';
+    if (clean === 'rangel') return 'rangel';
+    return clean;
+  };
   return normalize(authenticatedUserId) === normalize(targetUserId);
 }
 

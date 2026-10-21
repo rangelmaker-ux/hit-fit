@@ -13,7 +13,8 @@ import { GuidedWorkoutView, SkippedExerciseRecord } from '@/components/guided-wo
 import { WorkoutCockpit, MainTabType } from '@/components/workout-cockpit';
 import { WatchModal } from '@/components/watch-modal';
 import { WorkoutCompletedModal } from '@/components/workout-completed-modal';
-import { OnboardingAuthView } from '@/components/onboarding-auth-view';
+import { AuthLoginView } from '@/components/auth-login-view';
+import { FirstAccessModal } from '@/components/first-access-modal';
 import { getAvatar } from '@/lib/avatar-storage';
 import {
   AuthenticatedUser,
@@ -31,7 +32,7 @@ interface SavedSetState {
 
 const PEOPLE_CONFIG = [
   { id: 'person-rangel', name: 'Rangel' },
-  { id: 'person-geicsania', name: 'Geicsania' }
+  { id: 'person-geicsania', name: 'Jack' }
 ];
 
 function getInitialDayIndex(): number {
@@ -173,8 +174,8 @@ export default function Home() {
   }, [restActive, restEndTime]);
 
   const currentPerson = PEOPLE_CONFIG.find((p) => p.id === activeProfile) || PEOPLE_CONFIG[0];
-  const isGeicsania = currentPerson.name.toLowerCase().includes('geic');
-  const accentColor = isGeicsania ? '#FF267A' : '#C4F53C';
+  const isJack = currentPerson.name.toLowerCase().includes('jack') || currentPerson.id === 'person-geicsania';
+  const accentColor = isJack ? '#FF267A' : '#C4F53C';
   const todayWorkout = workouts[dayIndex] || WORKOUT_DAYS[dayIndex];
 
   // REGRA DE SEGURANÇA E AUTORIZAÇÃO:
@@ -314,14 +315,29 @@ export default function Home() {
     );
   }
 
-  // TELA DE CADASTRO OU LOGIN SE NÃO ESTIVER AUTENTICADO (APLICATIVO ZERADO)
+  // TELA DE LOGIN PREMIUM (SEM FORMULÁRIO DE BIOMETRIA PRÉVIO)
   if (!currentUser) {
     return (
       <main className="min-h-screen bg-[#07090C] text-neutral-100 flex items-center justify-center p-4 selection:bg-[#C4F53C]/30">
-        <OnboardingAuthView
+        <AuthLoginView
           onAuthenticated={(user) => {
             setCurrentUser(user);
             setActiveProfile(user.id);
+            refreshAvatars();
+          }}
+        />
+      </main>
+    );
+  }
+
+  // PRIMEIRO ACESSO APÓS O LOGIN (CONFIGURAÇÃO DE BIOMETRIA INDIVIDUAL SE INCOMPLETO)
+  if (currentUser.needsProfileSetup) {
+    return (
+      <main className="min-h-screen bg-[#07090C] text-neutral-100 flex items-center justify-center p-4 selection:bg-[#C4F53C]/30">
+        <FirstAccessModal
+          user={currentUser}
+          onCompleted={(updatedUser) => {
+            setCurrentUser(updatedUser);
             refreshAvatars();
           }}
         />

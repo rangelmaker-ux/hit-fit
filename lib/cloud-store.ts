@@ -9,7 +9,7 @@
 
 export interface StoredUserAccount {
   id: string; // 'person-rangel' | 'person-geicsania'
-  username: 'rangel' | 'geicsania';
+  username: 'rangel' | 'jack' | 'geicsania';
   name: string;
   birthDate: string; // YYYY-MM-DD
   age: number;
@@ -138,6 +138,10 @@ export async function createAtomicUserAccount(user: StoredUserAccount): Promise<
   if (result === 'OK' || result === true) {
     // Espelha no username para busca rápida
     await kvExecute('SET', `hitfit:user:${user.username}`, userJson);
+    if (user.id === 'person-geicsania') {
+      await kvExecute('SET', 'hitfit:user:jack', userJson);
+      await kvExecute('SET', 'hitfit:user:geicsania', userJson);
+    }
     return true;
   }
 
@@ -156,6 +160,10 @@ export async function updateUserAccount(user: StoredUserAccount): Promise<void> 
   const userJson = JSON.stringify(user);
   await kvExecute('SET', `hitfit:user:${user.id}`, userJson);
   await kvExecute('SET', `hitfit:user:${user.username}`, userJson);
+  if (user.id === 'person-geicsania') {
+    await kvExecute('SET', 'hitfit:user:jack', userJson);
+    await kvExecute('SET', 'hitfit:user:geicsania', userJson);
+  }
 }
 
 /**
@@ -166,12 +174,23 @@ export async function getUserAccount(idOrUsername: string): Promise<StoredUserAc
     return null;
   }
 
-  const clean = idOrUsername.toLowerCase().trim();
+  let clean = idOrUsername.toLowerCase().trim();
+  if (clean === 'jack' || clean === 'geicsania' || clean === 'person-jack') {
+    clean = 'person-geicsania';
+  } else if (clean === 'rangel') {
+    clean = 'person-rangel';
+  }
+
   const raw = await kvExecute('GET', `hitfit:user:${clean}`);
   if (!raw) return null;
 
   try {
-    return typeof raw === 'string' ? JSON.parse(raw) : (raw as StoredUserAccount);
+    const user = typeof raw === 'string' ? JSON.parse(raw) : (raw as StoredUserAccount);
+    if (user && user.id === 'person-geicsania') {
+      user.name = 'Jack';
+      user.username = 'jack';
+    }
+    return user;
   } catch {
     return null;
   }

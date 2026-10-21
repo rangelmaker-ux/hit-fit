@@ -19,10 +19,10 @@ export function AthleteSwitcher({
     <div className="relative w-full p-1 rounded-2xl bg-[#0E121A] border border-[rgba(255,255,255,0.07)] shadow-2xl flex items-center gap-1.5">
       {people.map((p) => {
         const isSelected = activeProfileId === p.id;
-        const isGeic = p.name.toLowerCase().includes('geic');
-        const themeColor = isGeic ? '#FF267A' : '#C4F53C';
-        const athleteTag = isGeic ? 'Recomp · 58kg' : 'Hipertrofia · 76kg';
-        const focusText = isGeic ? 'Definição & Ritmo' : 'Força & Potência';
+        const isJack = p.name.toLowerCase().includes('jack') || p.name.toLowerCase().includes('geic') || p.id === 'person-geicsania';
+        const themeColor = isJack ? '#FF267A' : '#C4F53C';
+        const athleteTag = isJack ? 'Recomposição · Jack' : 'Performance · Rangel';
+        const focusText = isJack ? 'Definição & Ritmo' : 'Força & Potência';
 
         return (
           <button

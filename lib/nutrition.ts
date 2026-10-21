@@ -160,8 +160,20 @@ export const DEFAULT_PROFILES: Record<string, UserBioProfile> = {
     customDailyDeficit: 450,
     waterGoalMl: 2500
   },
+  Jack: {
+    name: 'Jack',
+    gender: 'female',
+    weightKg: 0,
+    heightCm: 0,
+    age: 0,
+    targetWeightKg: 0,
+    goal: 'recomp',
+    activityFactor: 1.55,
+    customDailyDeficit: 350,
+    waterGoalMl: 2500
+  },
   Geicsania: {
-    name: 'Geicsania',
+    name: 'Jack',
     gender: 'female',
     weightKg: 0,
     heightCm: 0,
