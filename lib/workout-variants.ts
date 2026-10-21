@@ -1,5 +1,5 @@
-import type { Exercise, ExerciseEquipmentVariant, DayWorkout } from './workout-data.ts';
-import { getVariantRegistryItem } from './animation-registry.ts';
+import type { Exercise, ExerciseEquipmentVariant, DayWorkout } from './workout-data';
+import { getVariantRegistryItem } from './animation-registry';
 
 export interface SavedSetState {
   done: boolean;

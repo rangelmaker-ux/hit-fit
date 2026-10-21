@@ -7,7 +7,7 @@
  * Toda gravação precisa ser confirmada no armazenamento durável antes de retornar sucesso.
  */
 
-import { generateSalt, hashPassword } from './auth-crypto.ts';
+import { generateSalt, hashPassword } from './auth-crypto';
 
 export interface StoredUserAccount {
   id: string; // 'person-rangel' | 'person-geicsania'

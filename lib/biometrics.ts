@@ -9,10 +9,10 @@
  * - Sincronização entre abas (Início, Treino, Saúde, Evolução, Perfil) e nuvem
  */
 
-import { calculateAge } from './auth-crypto.ts';
-import type { AuthenticatedUser } from './auth-client.ts';
-import { updateAthleteProfile, setStoredUser } from './auth-client.ts';
-import type { UserBioProfile } from './nutrition.ts';
+import { calculateAge } from './auth-crypto';
+import type { AuthenticatedUser } from './auth-client';
+import { updateAthleteProfile, setStoredUser } from './auth-client';
+import type { UserBioProfile } from './nutrition';
 
 export interface ParsedHeight {
   cm: number | null;

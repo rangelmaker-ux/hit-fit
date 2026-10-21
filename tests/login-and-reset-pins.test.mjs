@@ -16,9 +16,7 @@ import {
   verifySessionToken,
   isAdminKeyConfigured,
   verifyAdminKey,
-  isAuthSecretConfigured,
-  canModifyAthleteData,
-  getAuthSecret
+  canModifyAthleteData
 } from '../lib/auth-crypto.ts';
 
 import {
