@@ -2,14 +2,65 @@
  * HIT-FIT 2.0 | Módulo Criptográfico de Autenticação e Autorização Segura
  * Utiliza WebCrypto nativo (compatível com Node.js 18+, Edge e Browser)
  * PBKDF2 (SHA-256, 100.000 iterações) + Salt aleatório de 16 bytes
- * Assinatura criptográfica HMAC-SHA256 para tokens de sessão (JWT-like)
+ * Assinatura criptográfica HMAC-SHA256 para tokens de sessão
+ * 
+ * ATENÇÃO DE GOVERNANÇA: NENHUM SEGREDO FIXO NO CÓDIGO-FONTE.
+ * Exige a variável HITFIT_AUTH_SECRET configurada no ambiente do servidor.
  */
 
 const PBKDF2_ITERATIONS = 100_000;
 const HASH_LENGTH = 32; // 256 bits
+const MIN_SECRET_LENGTH = 32;
 
-// Segredo do servidor para assinatura de tokens (com fallback determinístico seguro para desenvolvimento)
-const TOKEN_SECRET = process.env.HITFIT_AUTH_SECRET || 'hitfit-duo-pro-master-secret-key-2026-secure';
+export const ALLOWED_ROLES = ['rangel', 'geicsania'] as const;
+export type AllowedRole = (typeof ALLOWED_ROLES)[number];
+
+export class AuthSecretMissingError extends Error {
+  constructor() {
+    super(
+      'CONFIGURAÇÃO CRÍTICA AUSENTE: A variável de ambiente HITFIT_AUTH_SECRET não está configurada no servidor ou possui menos de 32 caracteres. Configure HITFIT_AUTH_SECRET no painel da Vercel / ambiente de produção antes de emitir ou validar autenticações.'
+    );
+    this.name = 'AuthSecretMissingError';
+  }
+}
+
+/**
+ * Verifica se a variável de ambiente do segredo de autenticação está configurada com tamanho seguro
+ */
+export function isAuthSecretConfigured(): boolean {
+  const secret = process.env.HITFIT_AUTH_SECRET;
+  return Boolean(secret && secret.trim().length >= MIN_SECRET_LENGTH);
+}
+
+/**
+ * Obtém o segredo de assinatura estritamente a partir das variáveis de ambiente
+ * Lança erro caso o segredo esteja ausente ou seja inseguro.
+ */
+export function getAuthSecret(): string {
+  const secret = process.env.HITFIT_AUTH_SECRET;
+  if (!secret || secret.trim().length < MIN_SECRET_LENGTH) {
+    throw new AuthSecretMissingError();
+  }
+  return secret.trim();
+}
+
+/**
+ * Valida se a role solicitada pertence estritamente aos atletas autorizados
+ */
+export function isValidRole(role: string): role is AllowedRole {
+  return ALLOWED_ROLES.includes(role as AllowedRole);
+}
+
+/**
+ * Retorna o identificador do parceiro autorizado único para um dado atleta
+ * Rangel <-> Geicsania (nenhum terceiro é aceito)
+ */
+export function getAuthorizedPartnerId(userId: string): string | null {
+  const clean = userId.replace(/^person-/, '').toLowerCase().trim();
+  if (clean === 'rangel') return 'person-geicsania';
+  if (clean === 'geicsania') return 'person-rangel';
+  return null;
+}
 
 /**
  * Converte ArrayBuffer para string hexadecimal
@@ -90,19 +141,21 @@ export async function verifyPassword(password: string, salt: string, storedHash:
 export interface SessionPayload {
   userId: string;
   name: string;
-  role: 'rangel' | 'geicsania';
+  role: AllowedRole;
   iat: number; // Emitido em (timestamp ms)
   exp: number; // Expiração (timestamp ms)
 }
 
 /**
  * Cria uma chave HMAC para assinatura e validação de tokens
+ * Exige segredo fornecido por variável de ambiente segura
  */
 async function getHmacKey(): Promise<CryptoKey> {
+  const secret = getAuthSecret();
   const enc = new TextEncoder();
   return globalThis.crypto.subtle.importKey(
     'raw',
-    enc.encode(TOKEN_SECRET),
+    enc.encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign', 'verify']
@@ -113,7 +166,7 @@ async function getHmacKey(): Promise<CryptoKey> {
  * Gera um token de sessão criptograficamente assinado com validade configurável (padrão: 30 dias)
  */
 export async function createSessionToken(
-  user: { id: string; name: string; role: 'rangel' | 'geicsania' },
+  user: { id: string; name: string; role: AllowedRole },
   durationDays = 30
 ): Promise<string> {
   const now = Date.now();
@@ -168,6 +221,10 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
       return null; // Token expirado
     }
 
+    if (!isValidRole(payload.role)) {
+      return null;
+    }
+
     return payload;
   } catch {
     return null;
@@ -202,4 +259,3 @@ export function calculateAge(birthDateStr: string): number {
   }
   return Math.max(0, age);
 }
-

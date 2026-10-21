@@ -89,6 +89,19 @@ export function calculateActualDailyBurn(
 
 // Metas nutricionais balanceadas e seguras
 export function calculateTargets(profile: UserBioProfile) {
+  if (!profile.weightKg || profile.weightKg <= 0 || !profile.heightCm || profile.heightCm <= 0) {
+    return {
+      bmr: 0,
+      plannedTDEE: 0,
+      targetCalories: 0,
+      calorieAdjustment: 0,
+      targetProteinG: 0,
+      targetFatG: 0,
+      targetCarbsG: 0,
+      targetWaterMl: profile.waterGoalMl || 2500
+    };
+  }
+
   const bmr = calculateBMR(profile.weightKg, profile.heightCm, profile.age, profile.gender);
   const plannedTDEE = calculatePlannedTDEE(bmr, profile.activityFactor || 1.55);
 
@@ -138,25 +151,25 @@ export const DEFAULT_PROFILES: Record<string, UserBioProfile> = {
   Rangel: {
     name: 'Rangel',
     gender: 'male',
-    weightKg: 82,
-    heightCm: 178,
-    age: 30,
-    targetWeightKg: 76,
+    weightKg: 0,
+    heightCm: 0,
+    age: 0,
+    targetWeightKg: 0,
     goal: 'fat_loss',
     activityFactor: 1.55,
     customDailyDeficit: 450,
-    waterGoalMl: 3100
+    waterGoalMl: 2500
   },
   Geicsania: {
     name: 'Geicsania',
     gender: 'female',
-    weightKg: 64,
-    heightCm: 165,
-    age: 28,
-    targetWeightKg: 58,
+    weightKg: 0,
+    heightCm: 0,
+    age: 0,
+    targetWeightKg: 0,
     goal: 'recomp',
     activityFactor: 1.55,
     customDailyDeficit: 350,
-    waterGoalMl: 2400
+    waterGoalMl: 2500
   }
 };

@@ -9,8 +9,8 @@ export interface AuthenticatedUser {
   name: string;
   age: number;
   birthDate?: string;
-  initialWeightKg: number;
-  heightCm: number;
+  initialWeightKg: number | null;
+  heightCm: number | null;
   goal: string;
   activityLevel: string;
 }
@@ -66,8 +66,8 @@ export async function registerAthlete(payload: {
   role: 'rangel' | 'geicsania';
   name: string;
   birthDate: string;
-  initialWeightKg: number;
-  heightCm: number;
+  initialWeightKg: number | null;
+  heightCm: number | null;
   goal: string;
   activityLevel: string;
   password: string;

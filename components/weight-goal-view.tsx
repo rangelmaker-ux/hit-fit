@@ -5,8 +5,8 @@ import { Target, Edit3 } from 'lucide-react';
 import { NumericInput } from '@/components/ui/numeric-input';
 
 interface WeightGoalData {
-  initialWeightKg: number;
-  targetWeightKg: number;
+  initialWeightKg: number | null;
+  targetWeightKg: number | null;
   objective: 'fat_loss' | 'recomp' | 'hypertrophy';
   updatedAt: string;
 }
@@ -36,8 +36,8 @@ export function WeightGoalView({
       } catch {}
     }
     return {
-      initialWeightKg: isGeic ? 64 : 82,
-      targetWeightKg: isGeic ? 58 : 76,
+      initialWeightKg: null,
+      targetWeightKg: null,
       objective: isGeic ? 'recomp' : 'fat_loss',
       updatedAt: new Date().toISOString()
     };
@@ -59,7 +59,7 @@ export function WeightGoalView({
     if (isReadOnly || !tempTarget || tempTarget <= 0) return;
 
     setGoal({
-      initialWeightKg: tempInitial && tempInitial > 0 ? tempInitial : currentWeightKg,
+      initialWeightKg: tempInitial && tempInitial > 0 ? tempInitial : (currentWeightKg > 0 ? currentWeightKg : null),
       targetWeightKg: tempTarget,
       objective: tempObjective,
       updatedAt: new Date().toISOString()
@@ -68,14 +68,17 @@ export function WeightGoalView({
   };
 
   // Cálculo de progresso até a meta
-  const totalDelta = Math.abs(goal.targetWeightKg - goal.initialWeightKg);
-  const currentDelta = Math.abs(currentWeightKg - goal.initialWeightKg);
+  const hasValidGoal = Boolean(goal.targetWeightKg && goal.initialWeightKg && goal.targetWeightKg > 0 && goal.initialWeightKg > 0);
+  const totalDelta = hasValidGoal ? Math.abs((goal.targetWeightKg as number) - (goal.initialWeightKg as number)) : 0;
+  const currentDelta = hasValidGoal && currentWeightKg > 0 ? Math.abs(currentWeightKg - (goal.initialWeightKg as number)) : 0;
   const progressPct = totalDelta > 0
     ? Math.min(100, Math.max(0, Math.round((currentDelta / totalDelta) * 100)))
-    : 100;
+    : (hasValidGoal ? 100 : 0);
 
-  const diffToGoal = Math.round(Math.abs(currentWeightKg - goal.targetWeightKg) * 10) / 10;
-  const isGoalReached = diffToGoal === 0;
+  const diffToGoal = goal.targetWeightKg && currentWeightKg > 0
+    ? Math.round(Math.abs(currentWeightKg - goal.targetWeightKg) * 10) / 10
+    : 0;
+  const isGoalReached = diffToGoal === 0 && Boolean(goal.targetWeightKg);
 
   const objectiveLabels: Record<string, string> = {
     fat_loss: 'Definição & Queima de Gordura',
@@ -200,7 +203,9 @@ export function WeightGoalView({
             {objectiveLabels[goal.objective]}
           </span>
           <span className="text-xs font-mono font-bold text-neutral-400">
-            {isGoalReached ? 'Meta Alcançada!' : `Faltam ${diffToGoal} kg`}
+            {goal.targetWeightKg
+              ? (isGoalReached ? 'Meta Alcançada!' : `Faltam ${diffToGoal} kg`)
+              : 'Meta pendente de configuração'}
           </span>
         </div>
 
@@ -209,21 +214,24 @@ export function WeightGoalView({
           <div className="p-3 rounded-2xl bg-[#07090C] border border-white/[0.05]">
             <span className="text-[8px] font-mono uppercase text-neutral-400 tracking-wider block">INÍCIO</span>
             <strong className="text-lg font-mono font-black text-neutral-300 mt-0.5 block">
-              {goal.initialWeightKg} <span className="text-xs font-normal">kg</span>
+              {goal.initialWeightKg ? `${goal.initialWeightKg} ` : '-- '}
+              <span className="text-xs font-normal">{goal.initialWeightKg ? 'kg' : ''}</span>
             </strong>
           </div>
 
           <div className="p-3 rounded-2xl bg-[#07090C] border border-white/[0.08] relative">
             <span className="text-[8px] font-mono uppercase text-neutral-400 tracking-wider block">ATUAL</span>
             <strong className="text-xl font-mono font-black text-white mt-0.5 block" style={{ color: accentColor }}>
-              {currentWeightKg} <span className="text-xs font-normal">kg</span>
+              {currentWeightKg > 0 ? `${currentWeightKg} ` : '-- '}
+              <span className="text-xs font-normal">{currentWeightKg > 0 ? 'kg' : ''}</span>
             </strong>
           </div>
 
           <div className="p-3 rounded-2xl bg-[#07090C] border border-white/[0.05]">
             <span className="text-[8px] font-mono uppercase text-neutral-400 tracking-wider block">META</span>
             <strong className="text-lg font-mono font-black text-neutral-300 mt-0.5 block">
-              {goal.targetWeightKg} <span className="text-xs font-normal">kg</span>
+              {goal.targetWeightKg ? `${goal.targetWeightKg} ` : '-- '}
+              <span className="text-xs font-normal">{goal.targetWeightKg ? 'kg' : ''}</span>
             </strong>
           </div>
         </div>

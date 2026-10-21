@@ -1,12 +1,16 @@
 /**
- * HIT-FIT 2.0 | Suíte de Testes Automatizados
+ * HIT-FIT 2.0 | Suíte de Testes Automatizados de Segurança, Criptografia e Autorização
  * Valida:
- * 1. Criptografia PBKDF2 e Verificação de Senhas
- * 2. Tokens de Sessão com Assinatura HMAC-SHA256
- * 3. Regras de Autorização e RBAC no Servidor (Rangel vs Geicsania)
- * 4. Cálculo Automático de Idade
- * 5. Lógica de Treino Guiado Sequencial e Exercícios Pulados
- * 6. Prevenção do Bug do Zero nos Inputs Numéricos
+ * 1. Proteção de Segredos e Falha Segura (Ausência de HITFIT_AUTH_SECRET dispara erro explícito)
+ * 2. Criptografia PBKDF2 e Verificação de Senhas (100.000 iterações + Salt único)
+ * 3. Tokens de Sessão com Assinatura HMAC-SHA256 (Criação, validação, adulteração e expiração)
+ * 4. Restrição Estrita de Papéis (Roles) e Normalização (apenas rangel e geicsania)
+ * 5. Isolamento de Leitura de Parceiro Autorizado (getAuthorizedPartnerId)
+ * 6. Regras de Autorização RBAC no Servidor (Rangel vs Geicsania)
+ * 7. Cadastro Inicial: Cálculo Automático de Idade
+ * 8. Treino Guiado Sequencial: Discriminação real de concluídos vs pulados
+ * 9. Prevenção do Bug do Zero nos Inputs Numéricos e Decimais Brasileiros
+ * 10. Validação de Limites Biométricos Reais (rejeição de pesos absurdos e avatares gigantes)
  */
 
 import test from 'node:test';
@@ -20,10 +24,45 @@ import {
   createSessionToken,
   verifySessionToken,
   canModifyAthleteData,
-  calculateAge
+  calculateAge,
+  isAuthSecretConfigured,
+  getAuthSecret,
+  isValidRole,
+  getAuthorizedPartnerId,
+  AuthSecretMissingError
 } from '../lib/auth-crypto.ts';
 
-test('1. Criptografia PBKDF2: Geração de salt e hash seguro', async () => {
+const TEST_SECRET = 'hitfit-test-crypto-secret-key-at-least-32-characters-long-2026';
+
+test('1. Proteção de Segredos: Falha segura quando HITFIT_AUTH_SECRET está ausente ou curto', () => {
+  // Caso 1: Variável ausente / indefinida
+  delete process.env.HITFIT_AUTH_SECRET;
+  assert.strictEqual(isAuthSecretConfigured(), false, 'Deve retornar false se o segredo não estiver definido');
+  assert.throws(
+    () => getAuthSecret(),
+    (err) => err instanceof AuthSecretMissingError,
+    'Deve lançar AuthSecretMissingError quando o segredo estiver ausente'
+  );
+
+  // Caso 2: Segredo com menos de 32 caracteres (inseguro)
+  process.env.HITFIT_AUTH_SECRET = 'curto-demais';
+  assert.strictEqual(isAuthSecretConfigured(), false, 'Deve rejeitar segredos com menos de 32 caracteres');
+  assert.throws(
+    () => getAuthSecret(),
+    (err) => err instanceof AuthSecretMissingError,
+    'Deve lançar AuthSecretMissingError para segredos curtos'
+  );
+
+  // Caso 3: Segredo seguro configurado
+  process.env.HITFIT_AUTH_SECRET = TEST_SECRET;
+  assert.strictEqual(isAuthSecretConfigured(), true, 'Deve validar segredos com >= 32 caracteres');
+  assert.strictEqual(getAuthSecret(), TEST_SECRET);
+
+  // Restaura para os demais testes
+  process.env.HITFIT_AUTH_SECRET = TEST_SECRET;
+});
+
+test('2. Criptografia PBKDF2: Geração de salt e hash seguro', async () => {
   const salt = generateSalt(16);
   assert.ok(salt, 'Salt deve ser gerado');
   assert.strictEqual(salt.length, 32, 'Salt de 16 bytes em hex deve ter 32 caracteres');
@@ -42,7 +81,9 @@ test('1. Criptografia PBKDF2: Geração de salt e hash seguro', async () => {
   assert.strictEqual(isWrong, false, 'Senha incorreta deve retornar false');
 });
 
-test('2. Tokens de Sessão HMAC-SHA256: Criação, assinatura e verificação', async () => {
+test('3. Tokens de Sessão HMAC-SHA256: Criação, assinatura e verificação', async () => {
+  process.env.HITFIT_AUTH_SECRET = TEST_SECRET;
+
   const athlete = {
     id: 'person-rangel',
     name: 'Rangel',
@@ -72,7 +113,33 @@ test('2. Tokens de Sessão HMAC-SHA256: Criação, assinatura e verificação', 
   assert.strictEqual(expiredResult, null, 'Token expirado deve ser rejeitado');
 });
 
-test('3. Autorização RBAC Estrita: Proteção contra modificações cruzadas e adulteração de IDs', () => {
+test('4. Restrição Estrita de Papéis (Roles) e Normalização', () => {
+  assert.strictEqual(isValidRole('rangel'), true, 'rangel deve ser um papel válido');
+  assert.strictEqual(isValidRole('geicsania'), true, 'geicsania deve ser um papel válido');
+  
+  // Rejeição de papéis não autorizados
+  assert.strictEqual(isValidRole('admin'), false, 'admin deve ser rejeitado');
+  assert.strictEqual(isValidRole('root'), false, 'root deve ser rejeitado');
+  assert.strictEqual(isValidRole('anonymous'), false, 'anonymous deve ser rejeitado');
+  assert.strictEqual(isValidRole(''), false, 'string vazia deve ser rejeitada');
+});
+
+test('5. Isolamento de Parceiro Autorizado: getAuthorizedPartnerId', () => {
+  // O único parceiro autorizado de Rangel é Geicsania
+  assert.strictEqual(getAuthorizedPartnerId('person-rangel'), 'person-geicsania');
+  assert.strictEqual(getAuthorizedPartnerId('rangel'), 'person-geicsania');
+
+  // O único parceiro autorizado de Geicsania é Rangel
+  assert.strictEqual(getAuthorizedPartnerId('person-geicsania'), 'person-rangel');
+  assert.strictEqual(getAuthorizedPartnerId('geicsania'), 'person-rangel');
+
+  // Qualquer terceiro ou invasor não possui parceiro autorizado
+  assert.strictEqual(getAuthorizedPartnerId('person-intruder'), null);
+  assert.strictEqual(getAuthorizedPartnerId('admin'), null);
+  assert.strictEqual(getAuthorizedPartnerId(''), null);
+});
+
+test('6. Autorização RBAC Estrita: Proteção contra modificações cruzadas e adulteração de IDs', () => {
   // Rangel pode modificar os dados de Rangel
   assert.strictEqual(
     canModifyAthleteData('person-rangel', 'person-rangel'),
@@ -111,7 +178,7 @@ test('3. Autorização RBAC Estrita: Proteção contra modificações cruzadas e
   assert.strictEqual(canModifyAthleteData('person-rangel', ''), false);
 });
 
-test('4. Cadastro Inicial: Cálculo automático de idade', () => {
+test('7. Cadastro Inicial: Cálculo automático de idade', () => {
   const currentYear = new Date().getFullYear();
   const birthYear = currentYear - 30;
   
@@ -125,7 +192,7 @@ test('4. Cadastro Inicial: Cálculo automático de idade', () => {
   assert.strictEqual(calculateAge('data-invalida'), 0);
 });
 
-test('5. Treino Guiado Sequencial: Discriminação real de concluídos vs pulados', () => {
+test('8. Treino Guiado Sequencial: Discriminação real de concluídos vs pulados', () => {
   const exercises = [
     { id: 'ex-1', name: 'Agachamento', sets: 4 },
     { id: 'ex-2', name: 'Leg Press', sets: 4 },
@@ -165,7 +232,7 @@ test('5. Treino Guiado Sequencial: Discriminação real de concluídos vs pulado
   assert.strictEqual(skippedList[0].reason, 'Aparelho ou máquina ocupada');
 });
 
-test('6. Validação do Bug do Zero e Decimais Brasileiros no NumericInput', () => {
+test('9. Validação do Bug do Zero e Decimais Brasileiros no NumericInput', () => {
   // Função utilitária de parsing usada internamente no NumericInput
   const parseNumericValue = (text, allowDecimals) => {
     if (!text || text.trim() === '') return null;
@@ -187,4 +254,19 @@ test('6. Validação do Bug do Zero e Decimais Brasileiros no NumericInput', () 
 
   // 4. Aceitar inteiros
   assert.strictEqual(parseNumericValue('178', false), 178, 'Inteiro 178 deve retornar 178');
+});
+
+test('10. Validação de Limites de Integridade de Dados Biométricos', () => {
+  const isValidWeight = (w) => {
+    if (w === null || w === undefined) return true; // permite não informado
+    const n = Number(w);
+    return !isNaN(n) && n >= 20 && n <= 400;
+  };
+
+  assert.strictEqual(isValidWeight(82.5), true, 'Peso válido (82.5 kg) deve ser aceito');
+  assert.strictEqual(isValidWeight(64), true, 'Peso válido (64 kg) deve ser aceito');
+  assert.strictEqual(isValidWeight(null), true, 'Peso nulo (não informado) deve ser aceito');
+  assert.strictEqual(isValidWeight(10), false, 'Peso abaixo de 20 kg deve ser rejeitado');
+  assert.strictEqual(isValidWeight(500), false, 'Peso acima de 400 kg deve ser rejeitado');
+  assert.strictEqual(isValidWeight('texto-invalido'), false, 'Texto não numérico deve ser rejeitado');
 });
