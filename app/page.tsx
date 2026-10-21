@@ -23,6 +23,12 @@ import {
   logoutAthlete,
   pushSyncData
 } from '@/lib/auth-client';
+import {
+  getUnifiedBiometrics,
+  saveUnifiedBiometrics,
+  BIOMETRICS_EVENT,
+  UnifiedBiometrics
+} from '@/lib/biometrics';
 import { Dumbbell, Shield, LogOut, Watch, Lock } from 'lucide-react';
 
 interface SavedSetState {
@@ -292,17 +298,29 @@ export default function Home() {
     setCurrentUser(null);
   };
 
+  // Biometria Unificada com Sincronização em Tempo Real (Single Source of Truth)
+  const [, setBioVersion] = useState(0);
+
+  useEffect(() => {
+    const handleBiometricsChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ profileId: string; biometrics: UnifiedBiometrics }>;
+      if (customEvent.detail?.profileId === activeProfile) {
+        setBioVersion((v) => v + 1);
+      }
+    };
+    window.addEventListener(BIOMETRICS_EVENT, handleBiometricsChange);
+    return () => window.removeEventListener(BIOMETRICS_EVENT, handleBiometricsChange);
+  }, [activeProfile]);
+
+  const athleteBio = getUnifiedBiometrics(activeProfile, currentUser);
+
   // Leitura de Água e Peso Reais (sem valores predefinidos fictícios)
   const todayDate = new Date().toISOString().split('T')[0];
   const waterConsumedToday = isClient
     ? Number(localStorage.getItem(`hitfit-water-${todayDate}-${activeProfile}`) || 0)
     : 0;
-  const currentWeightToday = isClient
-    ? Number(localStorage.getItem(`hitfit-weight-${activeProfile}`) || 0)
-    : 0;
-  const targetWeightToday = isClient
-    ? Number(localStorage.getItem(`hitfit-goal-weight-${activeProfile}`) || 0)
-    : 0;
+  const currentWeightToday = athleteBio.currentWeightKg;
+  const targetWeightToday = athleteBio.targetWeightKg;
 
   if (!isClient || authChecking) {
     return (
@@ -447,7 +465,7 @@ export default function Home() {
             completedSets={completedSetsToday}
             totalSets={totalSetsToday}
             waterConsumedMl={waterConsumedToday}
-            waterGoalMl={Math.max(2000, Math.round(currentWeightToday * 38))}
+            waterGoalMl={athleteBio.waterGoalMl}
             currentWeightKg={currentWeightToday}
             targetWeightKg={targetWeightToday}
             onOpenWorkout={() => setViewTab('treino')}
@@ -510,12 +528,12 @@ export default function Home() {
             currentWeightKg={currentWeightToday}
             isReadOnly={isReadOnly}
             onWeightUpdated={(w) => {
-              try {
-                localStorage.setItem(`hitfit-weight-${activeProfile}`, String(w));
-                if (currentUser && !isReadOnly) {
-                  pushSyncData({ userId: currentUser.id, currentWeightKg: w });
-                }
-              } catch {}
+              saveUnifiedBiometrics(
+                activeProfile,
+                { currentWeightKg: w, weightKg: w },
+                currentUser,
+                (u) => setCurrentUser(u)
+              );
             }}
           />
         )}
@@ -541,6 +559,8 @@ export default function Home() {
             people={PEOPLE_CONFIG}
             currentWeek={currentWeek}
             savedSets={savedSets}
+            currentUser={currentUser}
+            onUserUpdated={(u) => setCurrentUser(u)}
             onAvatarUpdated={refreshAvatars}
             onLogout={handleLogout}
           />

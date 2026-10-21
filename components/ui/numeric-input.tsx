@@ -158,7 +158,12 @@ export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps
       onFocus={handleFocus}
       onBlur={handleBlur}
       placeholder={placeholder}
-      className={className}
+      className={`text-base ${className}`}
+      style={{
+        fontSize: '16px',
+        touchAction: 'manipulation',
+        ...rest.style
+      }}
       autoComplete="off"
       autoCorrect="off"
       spellCheck={false}

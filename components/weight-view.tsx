@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Scale, Plus, Trash2, TrendingDown, TrendingUp, Calendar } from 'lucide-react';
 import { NumericInput } from '@/components/ui/numeric-input';
+import { getUnifiedBiometrics, saveUnifiedBiometrics } from '@/lib/biometrics';
 
 export interface WeightRecord {
   id: string;
@@ -38,8 +39,22 @@ export function WeightView({
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem(`hitfit-weight-history-${profileId}`);
-        if (stored) return JSON.parse(stored);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
       } catch {}
+    }
+    // Seed com o peso cadastrado do atleta se não houver histórico
+    const bio = getUnifiedBiometrics(profileId);
+    if (bio.currentWeightKg > 0) {
+      const today = new Date().toISOString().split('T')[0];
+      return [{
+        id: `w-init-${Date.now()}`,
+        date: today,
+        weightKg: bio.currentWeightKg,
+        notes: 'Peso inicial cadastrado'
+      }];
     }
     return [];
   });
@@ -78,6 +93,8 @@ export function WeightView({
     };
 
     setHistory((prev) => [newRecord, ...prev]);
+    saveUnifiedBiometrics(profileId, { currentWeightKg: inputWeight, weightKg: inputWeight });
+    onWeightUpdated?.(inputWeight);
     setInputWeight(null);
     setIsAdding(false);
   };
@@ -169,7 +186,7 @@ export function WeightView({
                 type="date"
                 value={inputDate}
                 onChange={(e) => setInputDate(e.target.value)}
-                className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono text-sm outline-none"
+                className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono font-bold text-base outline-none"
               />
             </label>
           </div>

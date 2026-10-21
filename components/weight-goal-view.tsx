@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Edit3 } from 'lucide-react';
 import { NumericInput } from '@/components/ui/numeric-input';
+import { getUnifiedBiometrics, saveUnifiedBiometrics } from '@/lib/biometrics';
 
 interface WeightGoalData {
   initialWeightKg: number | null;
@@ -32,13 +33,18 @@ export function WeightGoalView({
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem(`hitfit-goal-${profileId}`);
-        if (stored) return JSON.parse(stored);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && (parsed.targetWeightKg || parsed.initialWeightKg)) return parsed;
+        }
       } catch {}
     }
+    // Seed a partir da biometria cadastrada
+    const bio = getUnifiedBiometrics(profileId);
     return {
-      initialWeightKg: null,
-      targetWeightKg: null,
-      objective: isJack ? 'recomp' : 'fat_loss',
+      initialWeightKg: bio.initialWeightKg > 0 ? bio.initialWeightKg : (currentWeightKg > 0 ? currentWeightKg : null),
+      targetWeightKg: bio.targetWeightKg > 0 ? bio.targetWeightKg : null,
+      objective: (bio.goal as WeightGoalData['objective']) || (isJack ? 'recomp' : 'fat_loss'),
       updatedAt: new Date().toISOString()
     };
   });
@@ -58,11 +64,19 @@ export function WeightGoalView({
   const handleSaveGoal = () => {
     if (isReadOnly || !tempTarget || tempTarget <= 0) return;
 
-    setGoal({
-      initialWeightKg: tempInitial && tempInitial > 0 ? tempInitial : (currentWeightKg > 0 ? currentWeightKg : null),
+    const initial = tempInitial && tempInitial > 0 ? tempInitial : (currentWeightKg > 0 ? currentWeightKg : null);
+    const updatedGoal: WeightGoalData = {
+      initialWeightKg: initial,
       targetWeightKg: tempTarget,
       objective: tempObjective,
       updatedAt: new Date().toISOString()
+    };
+
+    setGoal(updatedGoal);
+    saveUnifiedBiometrics(profileId, {
+      initialWeightKg: initial,
+      targetWeightKg: tempTarget,
+      goal: tempObjective
     });
     setIsEditing(false);
   };
@@ -170,7 +184,7 @@ export function WeightGoalView({
             <select
               value={tempObjective}
               onChange={(e) => setTempObjective(e.target.value as WeightGoalData['objective'])}
-              className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-bold text-xs outline-none"
+              className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-bold text-base outline-none"
             >
               <option value="fat_loss">Definição & Queima de Gordura</option>
               <option value="recomp">Recomposição Corporal</option>

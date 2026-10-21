@@ -279,16 +279,45 @@ export function canModifyAthleteData(authenticatedUserId: string, targetUserId: 
 }
 
 /**
- * Calcula a idade com base na data de nascimento (YYYY-MM-DD)
+ * Calcula a idade com base na data de nascimento no calendário civil (YYYY-MM-DD),
+ * sem risco de deslocamento por fuso horário (UTC vs GMT-3).
  */
-export function calculateAge(birthDateStr: string): number {
-  if (!birthDateStr) return 0;
-  const birth = new Date(birthDateStr);
-  if (isNaN(birth.getTime())) return 0;
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+export function calculateAge(birthDateStr: string, referenceDate: Date = new Date()): number {
+  if (!birthDateStr || typeof birthDateStr !== 'string') return 0;
+  const trimmed = birthDateStr.trim();
+  if (!trimmed) return 0;
+
+  let birthYear = 0;
+  let birthMonth = 0; // 1-12
+  let birthDay = 0;
+
+  if (trimmed.includes('-') || trimmed.includes('/')) {
+    const parts = trimmed.split(/[-/]/).map((p) => parseInt(p, 10));
+    if (parts.length === 3 && parts.every((n) => !isNaN(n) && n > 0)) {
+      if (parts[0] > 1000) {
+        // YYYY-MM-DD ou YYYY/MM/DD
+        [birthYear, birthMonth, birthDay] = parts;
+      } else {
+        // DD-MM-YYYY ou DD/MM/YYYY
+        [birthDay, birthMonth, birthYear] = parts;
+      }
+    }
+  }
+
+  if (!birthYear || !birthMonth || !birthDay) {
+    const fallback = new Date(trimmed);
+    if (isNaN(fallback.getTime())) return 0;
+    birthYear = fallback.getUTCFullYear();
+    birthMonth = fallback.getUTCMonth() + 1;
+    birthDay = fallback.getUTCDate();
+  }
+
+  const currentYear = referenceDate.getFullYear();
+  const currentMonth = referenceDate.getMonth() + 1;
+  const currentDay = referenceDate.getDate();
+
+  let age = currentYear - birthYear;
+  if (currentMonth < birthMonth || (currentMonth === birthMonth && currentDay < birthDay)) {
     age--;
   }
   return Math.max(0, age);

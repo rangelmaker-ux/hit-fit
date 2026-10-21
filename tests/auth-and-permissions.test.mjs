@@ -44,6 +44,12 @@ import {
   MAX_FAILED_LOGIN_ATTEMPTS
 } from '../lib/cloud-store.ts';
 
+import {
+  parseHeight,
+  formatHeight,
+  formatWeight
+} from '../lib/biometrics.ts';
+
 const TEST_SECRET = 'hitfit-test-crypto-secret-key-at-least-32-characters-long-2026';
 
 test('1. Proteção de Segredos: Falha segura quando HITFIT_AUTH_SECRET está ausente ou curto', () => {
@@ -228,16 +234,39 @@ test('7. Validação do Formato de PIN de 6 dígitos numéricos', () => {
   assert.strictEqual(isValidPin('12 345'), false, 'PIN com espaços deve ser rejeitado');
 });
 
-test('8. Cadastro / Primeiro Acesso: Cálculo automático de idade', () => {
-  const currentYear = new Date().getFullYear();
-  const birthYear = currentYear - 30;
-  
-  // Data com aniversário já ocorrido
-  const pastBirthDate = `${birthYear}-01-01`;
-  const age = calculateAge(pastBirthDate);
-  assert.strictEqual(age, 30, 'Idade calculada deve ser 30 anos');
+test('8. Cadastro / Primeiro Acesso: Cálculo automático de idade civil (sem erro UTC)', () => {
+  // Teste 8.1: Nascido em 1997-05-15 avaliado em 2026-10-20 (aniversário já ocorreu no ano)
+  const refOct2026 = new Date(2026, 9, 20); // 20 de outubro de 2026
+  assert.strictEqual(
+    calculateAge('1997-05-15', refOct2026),
+    29,
+    'Nascido em 15/05/1997 avaliado em 20/10/2026 deve ter exatamente 29 anos'
+  );
 
-  // Data inválida deve retornar 0 com segurança
+  // Teste 8.2: Véspera do aniversário (aniversário ainda não ocorreu)
+  const refEve2026 = new Date(2026, 4, 14); // 14 de maio de 2026
+  assert.strictEqual(
+    calculateAge('1997-05-15', refEve2026),
+    28,
+    'Um dia antes do aniversário a idade deve ser 28 anos'
+  );
+
+  // Teste 8.3: No dia exato do aniversário
+  const refBday2026 = new Date(2026, 4, 15); // 15 de maio de 2026
+  assert.strictEqual(
+    calculateAge('1997-05-15', refBday2026),
+    29,
+    'No dia exato do aniversário a idade deve virar para 29 anos'
+  );
+
+  // Teste 8.4: Formato com barra DD/MM/YYYY
+  assert.strictEqual(
+    calculateAge('15/05/1997', refOct2026),
+    29,
+    'Formato DD/MM/YYYY também deve calcular 29 anos'
+  );
+
+  // Teste 8.5: Dados inválidos devem retornar 0 com segurança
   assert.strictEqual(calculateAge(''), 0);
   assert.strictEqual(calculateAge('data-invalida'), 0);
 });
@@ -409,5 +438,49 @@ test('14. Revogação e Invalidação de Sessões: Invalidação de tokens anter
     false,
     'Novo token emitido após a revogação deve ser válido'
   );
+});
+
+test('15. Normalização de Altura em Metros: Suporte a vírgula, ponto e centímetros sem distorção', () => {
+  // Caso 1: Digitação com vírgula em metros (padrão brasileiro "1,78")
+  const hComma = parseHeight('1,78');
+  assert.strictEqual(hComma.meters, 1.78, 'Deve extrair 1.78 metros');
+  assert.strictEqual(hComma.cm, 178, 'Deve converter para 178 cm');
+  assert.strictEqual(hComma.displayMeters, '1,78', 'Display em metros deve ser 1,78');
+  assert.strictEqual(hComma.displayFull, '1,78 m');
+
+  // Caso 2: Digitação com ponto em metros ("1.78")
+  const hDot = parseHeight('1.78');
+  assert.strictEqual(hDot.meters, 1.78);
+  assert.strictEqual(hDot.cm, 178);
+
+  // Caso 3: Número flutuante em metros (1.78)
+  const hNum = parseHeight(1.78);
+  assert.strictEqual(hNum.meters, 1.78);
+  assert.strictEqual(hNum.cm, 178);
+
+  // Caso 4: Centímetros (178)
+  const hCm = parseHeight(178);
+  assert.strictEqual(hCm.meters, 1.78, '178 cm deve virar 1.78 m');
+  assert.strictEqual(hCm.cm, 178);
+
+  // Caso 5: Formatação de altura
+  assert.strictEqual(formatHeight(178), '1,78 m');
+  assert.strictEqual(formatHeight(1.78), '1,78 m');
+  assert.strictEqual(formatHeight(0), '-- m');
+  assert.strictEqual(formatHeight(null), '-- m');
+});
+
+test('16. Formatação de Peso e Decimais no Padrão Brasileiro', () => {
+  // Peso inteiro
+  assert.strictEqual(formatWeight(97), '97 kg');
+  
+  // Peso com decimais (ex: 97,5 kg)
+  assert.strictEqual(formatWeight(97.5), '97,5 kg');
+  assert.strictEqual(formatWeight(82.3), '82,3 kg');
+
+  // Valores vazios ou zerados
+  assert.strictEqual(formatWeight(0), '-- kg');
+  assert.strictEqual(formatWeight(null), '-- kg');
+  assert.strictEqual(formatWeight(undefined), '-- kg');
 });
 

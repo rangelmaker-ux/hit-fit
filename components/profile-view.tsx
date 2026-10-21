@@ -12,8 +12,17 @@ import {
 } from 'lucide-react';
 import { getAvatar, saveAvatar, deleteAvatar, compressImageFile } from '@/lib/avatar-storage';
 import { NumericInput } from '@/components/ui/numeric-input';
-import { UserBioProfile, DEFAULT_PROFILES } from '@/lib/nutrition';
 import { DuoView } from '@/components/duo-view';
+import {
+  getUnifiedBiometrics,
+  saveUnifiedBiometrics,
+  parseHeight,
+  formatHeight,
+  formatWeight,
+  BIOMETRICS_EVENT,
+  UnifiedBiometrics
+} from '@/lib/biometrics';
+import { AuthenticatedUser } from '@/lib/auth-client';
 
 interface ProfileViewProps {
   profileId: string;
@@ -23,6 +32,8 @@ interface ProfileViewProps {
   people: { id: string; name: string }[];
   currentWeek: string;
   savedSets: Record<string, { done: boolean; weightKg?: string }>;
+  currentUser?: AuthenticatedUser | null;
+  onUserUpdated?: (user: AuthenticatedUser) => void;
   onAvatarUpdated?: () => void;
   onLogout?: () => void;
 }
@@ -35,11 +46,11 @@ export function ProfileView({
   people,
   currentWeek,
   savedSets,
+  currentUser,
+  onUserUpdated,
   onAvatarUpdated,
   onLogout
 }: ProfileViewProps) {
-  const isJack = athleteName.toLowerCase().includes('jack') || athleteName.toLowerCase().includes('geic') || profileId === 'person-geicsania';
-
   // Foto de Perfil via IndexedDB
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<string | null>(null);
@@ -48,30 +59,6 @@ export function ProfileView({
 
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-
-  // Perfil Biométrico
-  const [profile, setProfile] = useState<UserBioProfile>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(`hitfit-bio-${profileId}`);
-        if (stored) return JSON.parse(stored);
-      } catch {}
-    }
-    return DEFAULT_PROFILES[athleteName] || {
-      name: athleteName,
-      gender: isJack ? 'female' : 'male',
-      weightKg: 0,
-      heightCm: 0,
-      age: 0,
-      targetWeightKg: 0,
-      goal: isJack ? 'recomp' : 'fat_loss',
-      activityFactor: 1.55,
-      customDailyDeficit: 400,
-      waterGoalMl: 2500
-    };
-  });
-
-  const [editingBio, setEditingBio] = useState(false);
 
   // Carrega Avatar do IndexedDB ao montar ou trocar de perfil
   useEffect(() => {
@@ -84,13 +71,29 @@ export function ProfileView({
     };
   }, [profileId]);
 
-  // Salva biometria no localStorage
+  // Perfil Biométrico Unificado derivado no render
+  const [, setBioVersion] = useState(0);
+  const bio = getUnifiedBiometrics(profileId, currentUser);
+
+  const [editingBio, setEditingBio] = useState(false);
+
+  // Campos temporários em edição
+  const [editWeight, setEditWeight] = useState<number | null>(null);
+  const [editHeightMeters, setEditHeightMeters] = useState<number | null>(null);
+  const [editAge, setEditAge] = useState<number | null>(null);
+  const [editTargetWeight, setEditTargetWeight] = useState<number | null>(null);
+
+  // Escuta evento global de atualização biométrica
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem(`hitfit-bio-${profileId}`, JSON.stringify(profile));
-    } catch {}
-  }, [profile, profileId]);
+    const handleBiometricsChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ profileId: string; biometrics: UnifiedBiometrics }>;
+      if (customEvent.detail?.profileId === profileId) {
+        setBioVersion((v) => v + 1);
+      }
+    };
+    window.addEventListener(BIOMETRICS_EVENT, handleBiometricsChange);
+    return () => window.removeEventListener(BIOMETRICS_EVENT, handleBiometricsChange);
+  }, [profileId]);
 
   const handleSelectFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isReadOnly) return;
@@ -251,7 +254,7 @@ export function ProfileView({
             {athleteName}
           </h2>
           <span className="text-xs font-mono text-neutral-400 mt-0.5 block">
-            {profile.gender === 'female' ? 'Atleta Feminina' : 'Atleta Masculino'} · {profile.weightKg} kg
+            {bio.gender === 'female' ? 'Atleta Feminina' : 'Atleta Masculino'} · {formatWeight(bio.currentWeightKg)} · {formatHeight(bio.heightCm)}
           </span>
         </div>
 
@@ -310,7 +313,30 @@ export function ProfileView({
 
           {!isReadOnly && (
             <button
-              onClick={() => setEditingBio(!editingBio)}
+              onClick={async () => {
+                if (editingBio) {
+                  const parsedH = parseHeight(editHeightMeters);
+                  await saveUnifiedBiometrics(
+                    profileId,
+                    {
+                      currentWeightKg: editWeight,
+                      weightKg: editWeight,
+                      heightCm: parsedH.cm,
+                      heightMeters: parsedH.meters,
+                      targetWeightKg: editTargetWeight
+                    },
+                    currentUser,
+                    onUserUpdated
+                  );
+                  setEditingBio(false);
+                } else {
+                  setEditWeight(bio.currentWeightKg || null);
+                  setEditHeightMeters(bio.heightMeters || null);
+                  setEditAge(bio.age || null);
+                  setEditTargetWeight(bio.targetWeightKg || null);
+                  setEditingBio(true);
+                }
+              }}
               className="text-xs font-mono font-bold px-3 py-1 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-neutral-300 border border-white/10 tap-haptic"
             >
               {editingBio ? 'Concluir' : 'Editar'}
@@ -321,54 +347,52 @@ export function ProfileView({
         {editingBio && !isReadOnly ? (
           <div className="grid grid-cols-2 gap-3 text-xs animate-in fade-in">
             <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
-              <span>Peso Atual (kg):</span>
+              <span>PESO (kg):</span>
               <NumericInput
-                value={profile.weightKg}
+                value={editWeight}
                 allowDecimals={true}
-                placeholder="Ex: 82"
-                onChangeValue={(val) => {
-                  if (val && val > 0) setProfile({ ...profile, weightKg: val });
-                }}
-                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-sm outline-none"
+                placeholder="Ex: 97,0"
+                min={20}
+                max={300}
+                onChangeValue={(val) => setEditWeight(val)}
+                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-base outline-none"
               />
             </label>
 
             <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
-              <span>Altura (cm):</span>
+              <span>ALTURA (m):</span>
               <NumericInput
-                value={profile.heightCm}
-                allowDecimals={false}
-                placeholder="Ex: 178"
-                onChangeValue={(val) => {
-                  if (val && val > 0) setProfile({ ...profile, heightCm: val });
-                }}
-                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-sm outline-none"
+                value={editHeightMeters}
+                allowDecimals={true}
+                placeholder="Ex: 1,78"
+                min={0.5}
+                max={2.5}
+                onChangeValue={(val) => setEditHeightMeters(val)}
+                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-base outline-none"
               />
             </label>
 
             <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
-              <span>Idade (anos):</span>
+              <span>IDADE (anos):</span>
               <NumericInput
-                value={profile.age}
+                value={editAge}
                 allowDecimals={false}
                 placeholder="Ex: 29"
-                onChangeValue={(val) => {
-                  if (val && val > 0) setProfile({ ...profile, age: val });
-                }}
-                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-sm outline-none"
+                onChangeValue={(val) => setEditAge(val)}
+                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-base outline-none"
               />
             </label>
 
             <label className="flex flex-col gap-1 text-[10px] font-mono text-neutral-400">
-              <span>Meta de Peso (kg):</span>
+              <span>META DE PESO (kg):</span>
               <NumericInput
-                value={profile.targetWeightKg}
+                value={editTargetWeight}
                 allowDecimals={true}
-                placeholder="Ex: 76"
-                onChangeValue={(val) => {
-                  if (val && val > 0) setProfile({ ...profile, targetWeightKg: val });
-                }}
-                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-sm outline-none"
+                placeholder="Ex: 85,0"
+                min={20}
+                max={300}
+                onChangeValue={(val) => setEditTargetWeight(val)}
+                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-base outline-none"
               />
             </label>
           </div>
@@ -376,19 +400,19 @@ export function ProfileView({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
             <div className="p-3 rounded-2xl bg-[#07090C] border border-white/[0.04]">
               <span className="text-[8px] font-mono uppercase text-neutral-400 block">PESO</span>
-              <strong className="text-sm font-mono font-bold text-white mt-0.5 block">{profile.weightKg} kg</strong>
+              <strong className="text-sm font-mono font-bold text-white mt-0.5 block">{formatWeight(bio.currentWeightKg)}</strong>
             </div>
             <div className="p-3 rounded-2xl bg-[#07090C] border border-white/[0.04]">
-              <span className="text-[8px] font-mono uppercase text-neutral-400 block">ALTURA</span>
-              <strong className="text-sm font-mono font-bold text-white mt-0.5 block">{profile.heightCm} cm</strong>
+              <span className="text-[8px] font-mono uppercase text-neutral-400 block">ALTURA (m)</span>
+              <strong className="text-sm font-mono font-bold text-white mt-0.5 block">{formatHeight(bio.heightCm)}</strong>
             </div>
             <div className="p-3 rounded-2xl bg-[#07090C] border border-white/[0.04]">
               <span className="text-[8px] font-mono uppercase text-neutral-400 block">IDADE</span>
-              <strong className="text-sm font-mono font-bold text-white mt-0.5 block">{profile.age} anos</strong>
+              <strong className="text-sm font-mono font-bold text-white mt-0.5 block">{bio.age > 0 ? `${bio.age} anos` : '-- anos'}</strong>
             </div>
             <div className="p-3 rounded-2xl bg-[#07090C] border border-white/[0.04]">
               <span className="text-[8px] font-mono uppercase text-neutral-400 block">META</span>
-              <strong className="text-sm font-mono font-bold text-sky-300 mt-0.5 block">{profile.targetWeightKg} kg</strong>
+              <strong className="text-sm font-mono font-bold text-sky-300 mt-0.5 block">{formatWeight(bio.targetWeightKg)}</strong>
             </div>
           </div>
         )}

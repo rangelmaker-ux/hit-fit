@@ -5,7 +5,6 @@ import {
   UserBioProfile, 
   calculateTargets, 
   calculateActualDailyBurn,
-  DEFAULT_PROFILES,
   QUICK_FOODS_CATALOG,
   FoodItem,
   Meal
@@ -18,6 +17,7 @@ import {
   Lock
 } from 'lucide-react';
 import { NumericInput } from '@/components/ui/numeric-input';
+import { getUnifiedBiometrics, BIOMETRICS_EVENT, UnifiedBiometrics } from '@/lib/biometrics';
 
 interface NutritionViewProps {
   profileId: string;
@@ -38,27 +38,43 @@ export function NutritionView({
 }: NutritionViewProps) {
   const isJack = profileName.toLowerCase().includes('jack') || profileName.toLowerCase().includes('geic') || profileId === 'person-geicsania';
 
-  // Carrega ou inicializa perfil biométrico
+  // Carrega ou inicializa perfil biométrico a partir da fonte unificada
   const [profile, setProfile] = useState<UserBioProfile>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(`hitfit-bio-${profileId}`);
-        if (stored) return JSON.parse(stored);
-      } catch {}
-    }
-    return DEFAULT_PROFILES[profileName] || {
+    const bio = getUnifiedBiometrics(profileId);
+    return {
       name: profileName,
       gender: isJack ? 'female' : 'male',
-      weightKg: 0,
-      heightCm: 0,
-      age: 0,
-      targetWeightKg: 0,
-      goal: isJack ? 'recomp' : 'fat_loss',
+      weightKg: bio.currentWeightKg || 0,
+      heightCm: bio.heightCm || 0,
+      age: bio.age || 0,
+      targetWeightKg: bio.targetWeightKg || 0,
+      goal: (bio.goal as 'fat_loss' | 'recomp' | 'hypertrophy') || (isJack ? 'recomp' : 'fat_loss'),
       activityFactor: 1.55,
-      customDailyDeficit: 400,
-      waterGoalMl: 2500
+      customDailyDeficit: bio.goal === 'fat_loss' ? 450 : 350,
+      waterGoalMl: bio.waterGoalMl || 2500
     };
   });
+
+  // Atualização em tempo real quando biometria mudar em outras abas
+  useEffect(() => {
+    const handleBiometricsChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ profileId: string; biometrics: UnifiedBiometrics }>;
+      if (customEvent.detail?.profileId === profileId) {
+        const b = customEvent.detail.biometrics;
+        setProfile((prev) => ({
+          ...prev,
+          weightKg: b.currentWeightKg || prev.weightKg,
+          heightCm: b.heightCm || prev.heightCm,
+          age: b.age || prev.age,
+          targetWeightKg: b.targetWeightKg || prev.targetWeightKg,
+          goal: (b.goal as 'fat_loss' | 'recomp' | 'hypertrophy') || prev.goal,
+          waterGoalMl: b.waterGoalMl || prev.waterGoalMl
+        }));
+      }
+    };
+    window.addEventListener(BIOMETRICS_EVENT, handleBiometricsChange);
+    return () => window.removeEventListener(BIOMETRICS_EVENT, handleBiometricsChange);
+  }, [profileId]);
 
   const [editingProfile, setEditingProfile] = useState(false);
 
@@ -439,45 +455,45 @@ export function NutritionView({
                 placeholder="Nome do alimento (ex: Omelete de 3 ovos)"
                 value={customFoodName}
                 onChange={(e) => setCustomFoodName(e.target.value)}
-                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-xs text-white outline-none"
+                className="p-2.5 bg-[#07090C] border border-white/15 rounded-xl text-base text-white outline-none"
               />
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-2 gap-2 text-base">
                 <input
                   type="text"
                   placeholder="Porção (ex: 200g)"
                   value={customPortion}
                   onChange={(e) => setCustomPortion(e.target.value)}
-                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-white outline-none"
+                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-base text-white outline-none"
                 />
                 <NumericInput
                   placeholder="Calorias (kcal)"
                   value={customCalories}
                   allowDecimals={false}
                   onChangeValue={(val) => setCustomCalories(val)}
-                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold outline-none"
+                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-white font-mono font-bold text-base outline-none"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="grid grid-cols-3 gap-2 text-base">
                 <NumericInput
                   placeholder="Prot (g)"
                   value={customProtein}
                   allowDecimals={true}
                   onChangeValue={(val) => setCustomProtein(val)}
-                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-emerald-300 font-mono outline-none"
+                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-emerald-300 font-mono text-base outline-none"
                 />
                 <NumericInput
                   placeholder="Carb (g)"
                   value={customCarbs}
                   allowDecimals={true}
                   onChangeValue={(val) => setCustomCarbs(val)}
-                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-amber-300 font-mono outline-none"
+                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-amber-300 font-mono text-base outline-none"
                 />
                 <NumericInput
                   placeholder="Gord (g)"
                   value={customFat}
                   allowDecimals={true}
                   onChangeValue={(val) => setCustomFat(val)}
-                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-sky-300 font-mono outline-none"
+                  className="p-2 bg-[#07090C] border border-white/15 rounded-xl text-sky-300 font-mono text-base outline-none"
                 />
               </div>
 

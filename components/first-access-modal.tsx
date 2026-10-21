@@ -4,8 +4,9 @@ import React, { useState, useId } from 'react';
 import { Sparkles, Camera, Upload, AlertCircle, ArrowRight, UserCheck, Calendar } from 'lucide-react';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { compressAndCropAvatar, saveAvatar } from '@/lib/avatar-storage';
-import { updateAthleteProfile, AuthenticatedUser } from '@/lib/auth-client';
+import { AuthenticatedUser } from '@/lib/auth-client';
 import { calculateAge } from '@/lib/auth-crypto';
+import { parseHeight, saveUnifiedBiometrics } from '@/lib/biometrics';
 
 interface FirstAccessModalProps {
   user: AuthenticatedUser;
@@ -18,7 +19,12 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
 
   const [birthDate, setBirthDate] = useState(user.birthDate || '');
   const [weightKg, setWeightKg] = useState<number | null>(user.initialWeightKg || null);
-  const [heightCm, setHeightCm] = useState<number | null>(user.heightCm || null);
+  const [heightMeters, setHeightMeters] = useState<number | null>(() => {
+    if (user.heightCm && user.heightCm > 0) {
+      return parseHeight(user.heightCm).meters;
+    }
+    return null;
+  });
   const [targetWeightKg, setTargetWeightKg] = useState<number | null>(null);
   const [goal, setGoal] = useState(user.goal || (isJack ? 'Recomposição Corporal' : 'Emagrecimento & Definição'));
   const [activityLevel, setActivityLevel] = useState(user.activityLevel || 'Moderado (3-4x por semana)');
@@ -58,41 +64,55 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
     }
 
     if (!weightKg || weightKg <= 0) {
-      setErrorMessage('Informe seu peso atual em kg.');
+      setErrorMessage('Informe seu peso atual em kg (ex: 97 ou 97,5).');
       return;
     }
 
-    if (!heightCm || heightCm <= 0) {
-      setErrorMessage('Informe sua altura em cm.');
+    const parsedH = parseHeight(heightMeters);
+    if (!parsedH.cm || parsedH.cm <= 0) {
+      setErrorMessage('Informe sua altura em metros (ex: 1,78).');
       return;
     }
 
     setLoading(true);
 
     try {
-      const res = await updateAthleteProfile({
-        userId: user.id,
-        birthDate,
-        initialWeightKg: weightKg,
-        heightCm,
-        targetWeightKg,
-        goal,
-        activityLevel,
-        avatarBase64
-      });
-
-      if (!res.success || !res.user) {
-        setLoading(false);
-        setErrorMessage(res.error || 'Falha ao salvar a ficha biométrica.');
-        return;
-      }
-
-      // Salva avatar no IndexedDB local para carregamento instantâneo
       if (avatarBase64) {
         await saveAvatar(user.id, avatarBase64);
       }
 
-      onCompleted(res.user);
+      await saveUnifiedBiometrics(
+        user.id,
+        {
+          birthDate,
+          weightKg,
+          currentWeightKg: weightKg,
+          initialWeightKg: weightKg,
+          heightCm: parsedH.cm,
+          heightMeters: parsedH.meters,
+          targetWeightKg,
+          goal,
+          activityLevel,
+          avatarBase64
+        },
+        user,
+        (updatedUser) => {
+          onCompleted(updatedUser);
+        }
+      );
+
+      const completedUser: AuthenticatedUser = {
+        ...user,
+        birthDate,
+        age: computedAge || user.age || 0,
+        initialWeightKg: weightKg,
+        heightCm: parsedH.cm,
+        goal,
+        activityLevel,
+        needsProfileSetup: false
+      };
+
+      onCompleted(completedUser);
     } catch (err) {
       setLoading(false);
       setErrorMessage(err instanceof Error ? err.message : 'Erro ao processar dados.');
@@ -208,13 +228,13 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
                 type="date"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
-                className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono font-bold text-xs outline-none focus:border-white/40"
+                className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono font-bold text-base outline-none focus:border-white/40"
               />
             </label>
 
             <div className="flex flex-col gap-1 text-[11px] font-mono font-bold text-neutral-300">
               <span>Idade Calculada:</span>
-              <div className="p-3 bg-[#07090C] border border-white/10 rounded-2xl text-neutral-300 font-mono font-bold text-xs flex items-center justify-between">
+              <div className="p-3 bg-[#07090C] border border-white/10 rounded-2xl text-neutral-300 font-mono font-bold text-base flex items-center justify-between">
                 <span>{computedAge !== null ? `${computedAge} anos` : 'Informe a data'}</span>
                 {computedAge !== null && <Sparkles size={13} style={{ color: accentColor }} />}
               </div>
@@ -224,24 +244,28 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
           {/* PESO ATUAL E ALTURA (NUMERICINPUT SEM BUG DO ZERO) */}
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-[11px] font-mono font-bold text-neutral-300">
-              <span>Peso Atual (kg):</span>
+              <span>PESO (kg):</span>
               <NumericInput
                 value={weightKg}
                 allowDecimals={true}
-                placeholder="Ex: 75,5"
+                placeholder="Ex: 97,0"
+                min={20}
+                max={300}
                 onChangeValue={(val) => setWeightKg(val)}
-                className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono font-bold text-sm outline-none focus:border-white/40"
+                className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono font-bold text-base outline-none focus:border-white/40"
               />
             </label>
 
             <label className="flex flex-col gap-1 text-[11px] font-mono font-bold text-neutral-300">
-              <span>Altura (cm):</span>
+              <span>ALTURA (m):</span>
               <NumericInput
-                value={heightCm}
-                allowDecimals={false}
-                placeholder="Ex: 175"
-                onChangeValue={(val) => setHeightCm(val)}
-                className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono font-bold text-sm outline-none focus:border-white/40"
+                value={heightMeters}
+                allowDecimals={true}
+                placeholder="Ex: 1,78"
+                min={0.5}
+                max={2.5}
+                onChangeValue={(val) => setHeightMeters(val)}
+                className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono font-bold text-base outline-none focus:border-white/40"
               />
             </label>
           </div>
@@ -252,9 +276,11 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
             <NumericInput
               value={targetWeightKg}
               allowDecimals={true}
-              placeholder="Ex: 70,0"
+              placeholder="Ex: 85,0"
+              min={20}
+              max={300}
               onChangeValue={(val) => setTargetWeightKg(val)}
-              className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono font-bold text-sm outline-none focus:border-white/40"
+              className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-mono font-bold text-base outline-none focus:border-white/40"
             />
           </label>
 
@@ -264,7 +290,7 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
             <select
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-bold text-xs outline-none"
+              className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-bold text-base outline-none"
             >
               <option value="Emagrecimento & Definição">Emagrecimento & Definição</option>
               <option value="Recomposição Corporal">Recomposição Corporal</option>
@@ -278,7 +304,7 @@ export function FirstAccessModal({ user, onCompleted }: FirstAccessModalProps) {
             <select
               value={activityLevel}
               onChange={(e) => setActivityLevel(e.target.value)}
-              className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-bold text-xs outline-none"
+              className="p-3 bg-[#07090C] border border-white/15 rounded-2xl text-white font-bold text-base outline-none"
             >
               <option value="Sedentário (pouco exercício)">Sedentário (pouco exercício)</option>
               <option value="Leve (1-2x por semana)">Leve (1-2x por semana)</option>
