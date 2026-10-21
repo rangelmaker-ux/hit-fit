@@ -7,6 +7,8 @@
  * Toda gravação precisa ser confirmada no armazenamento durável antes de retornar sucesso.
  */
 
+import { generateSalt, hashPassword } from './auth-crypto.ts';
+
 export interface StoredUserAccount {
   id: string; // 'person-rangel' | 'person-geicsania'
   username: 'rangel' | 'jack' | 'geicsania';
@@ -96,6 +98,13 @@ export function isCloudConfigured(): boolean {
 }
 
 /**
+ * Retorna true se estiver executando em ambiente de produção (Vercel ou NODE_ENV=production)
+ */
+export function isProductionEnvironment(): boolean {
+  return Boolean(process.env.VERCEL || process.env.NODE_ENV === 'production');
+}
+
+/**
  * Executa comando REST no Upstash Redis / Vercel KV com validação rigorosa de erro.
  * SEGURANÇA: Todos os comandos e parâmetros são enviados no corpo (body) de um HTTP POST (JSON Array).
  * NENHUM hash, salt, chave ou dado pessoal é exposto na URL.
@@ -158,6 +167,10 @@ export async function createAtomicUserAccount(user: StoredUserAccount): Promise<
     return false;
   }
 
+  if (isProductionEnvironment()) {
+    throw new PersistentStorageNotConfiguredError();
+  }
+
   // Fallback em memória (APENAS em ambiente local de teste onde o KV não estiver configurado)
   if (inMemoryUsers.has(user.id)) return false;
   inMemoryUsers.set(user.id, user);
@@ -182,6 +195,10 @@ export async function updateUserAccount(user: StoredUserAccount): Promise<void> 
       await kvExecute('SET', 'hitfit:user:geicsania', userJson);
     }
     return;
+  }
+
+  if (isProductionEnvironment()) {
+    throw new PersistentStorageNotConfiguredError();
   }
 
   inMemoryUsers.set(user.id, user);
@@ -216,6 +233,10 @@ export async function getUserAccount(idOrUsername: string): Promise<StoredUserAc
     return null;
   }
 
+  if (isProductionEnvironment()) {
+    throw new PersistentStorageNotConfiguredError();
+  }
+
   const user = inMemoryUsers.get(clean) || null;
   if (user && user.id === 'person-geicsania') {
     user.name = 'Jack';
@@ -237,6 +258,10 @@ export async function saveAthleteData(data: StoredAthleteData): Promise<void> {
     throw new PersistentStorageWriteError(`Resposta inesperada do banco permanente ao gravar dados: ${String(result)}`);
   }
 
+  if (isProductionEnvironment()) {
+    throw new PersistentStorageNotConfiguredError();
+  }
+
   inMemoryAthleteData.set(data.userId, data);
 }
 
@@ -250,6 +275,10 @@ export async function getAthleteData(userId: string): Promise<StoredAthleteData 
       return typeof raw === 'string' ? JSON.parse(raw) : (raw as StoredAthleteData);
     }
     return null;
+  }
+
+  if (isProductionEnvironment()) {
+    throw new PersistentStorageNotConfiguredError();
   }
 
   return inMemoryAthleteData.get(userId) || null;
@@ -304,7 +333,7 @@ function getClientSafeIdentifier(targetIdOrRole: string, ip: string): { accountK
 export async function getFailedLoginAttempts(
   targetIdOrRole: string,
   ip: string
-): Promise<{ blocked: boolean; attempts: number; retryAfterSeconds: number }> {
+): Promise<{ blocked: boolean; attempts: number; count?: number; retryAfterSeconds: number }> {
   const { accountKey, ipKey } = getClientSafeIdentifier(targetIdOrRole, ip);
 
   if (isCloudConfigured()) {
@@ -328,6 +357,7 @@ export async function getFailedLoginAttempts(
         return {
           blocked: true,
           attempts: maxAttempts,
+          count: maxAttempts,
           retryAfterSeconds: maxTtl > 0 ? maxTtl : RATE_LIMIT_WINDOW_SECONDS
         };
       }
@@ -335,6 +365,7 @@ export async function getFailedLoginAttempts(
       return {
         blocked: false,
         attempts: maxAttempts,
+        count: maxAttempts,
         retryAfterSeconds: 0
       };
     } catch {
@@ -357,10 +388,10 @@ export async function getFailedLoginAttempts(
       ipEntry && ipEntry.expiresAt > now ? ipEntry.expiresAt : 0
     );
     const retryAfterSeconds = Math.max(1, Math.ceil((expiresAt - now) / 1000));
-    return { blocked: true, attempts, retryAfterSeconds };
+    return { blocked: true, attempts, count: attempts, retryAfterSeconds };
   }
 
-  return { blocked: false, attempts, retryAfterSeconds: 0 };
+  return { blocked: false, attempts, count: attempts, retryAfterSeconds: 0 };
 }
 
 /**
@@ -493,4 +524,192 @@ export async function isSessionRevoked(
   }
 
   return revokedAt > 0 && issuedAtMs < revokedAt;
+}
+
+/**
+ * REINICIALIZAÇÃO ADMINISTRATIVA SEGURA DO NAMESPACE HIT-FIT:
+ * Remove exclusivamente as chaves pertencentes ao prefixo "hitfit:" no Redis / KV.
+ * É TERMINANTEMENTE PROIBIDO executar FLUSHALL ou FLUSHDB para não apagar dados de outros apps.
+ */
+export async function adminResetHitFitNamespace(options: {
+  deleteData?: boolean;
+  deleteUsers?: boolean;
+  clearRateLimits?: boolean;
+} = { deleteData: true, deleteUsers: true, clearRateLimits: true }): Promise<{ deletedCount: number; deletedKeys: string[] }> {
+  const deletedKeys: string[] = [];
+
+  if (isCloudConfigured()) {
+    try {
+      // 1. Coleta chaves pelo comando KEYS hitfit:*
+      let candidateKeys: string[] = [];
+      try {
+        const raw = await kvExecute('KEYS', 'hitfit:*');
+        if (Array.isArray(raw)) {
+          candidateKeys = raw as string[];
+        }
+      } catch {
+        // Se KEYS falhar (ex: restrição do provedor), prossegue com a lista canônica
+      }
+
+      // 2. Chaves canônicas conhecidas para garantir remoção completa
+      const canonicalKeys = [
+        'hitfit:user:person-rangel',
+        'hitfit:user:rangel',
+        'hitfit:user:person-geicsania',
+        'hitfit:user:jack',
+        'hitfit:user:geicsania',
+        'hitfit:data:person-rangel',
+        'hitfit:data:person-geicsania',
+        'hitfit:session:revoked:person-rangel',
+        'hitfit:session:revoked:person-geicsania',
+        'hitfit:ratelimit:account:person-rangel',
+        'hitfit:ratelimit:account:person-geicsania'
+      ];
+
+      const mergedKeys = Array.from(new Set([...candidateKeys, ...canonicalKeys]));
+      const keysToDelete: string[] = [];
+
+      for (const k of mergedKeys) {
+        if (!k.startsWith('hitfit:')) continue; // Proteção estrita contra chaves alheias
+
+        if (k.startsWith('hitfit:user:') && !options.deleteUsers) continue;
+        if (k.startsWith('hitfit:data:') && !options.deleteData) continue;
+        if (k.startsWith('hitfit:ratelimit:') && !options.clearRateLimits) continue;
+
+        keysToDelete.push(k);
+      }
+
+      // Deleta em lotes seguros
+      for (let i = 0; i < keysToDelete.length; i += 20) {
+        const chunk = keysToDelete.slice(i, i + 20);
+        if (chunk.length > 0) {
+          await kvExecute('DEL', ...chunk);
+          deletedKeys.push(...chunk);
+        }
+      }
+    } catch (err) {
+      throw new PersistentStorageWriteError(
+        `Falha durante a limpeza do namespace HIT-FIT: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  } else if (isProductionEnvironment()) {
+    throw new PersistentStorageNotConfiguredError();
+  }
+
+  // Limpa também armazenamento em memória
+  if (options.deleteUsers) inMemoryUsers.clear();
+  if (options.deleteData) inMemoryAthleteData.clear();
+  if (options.clearRateLimits) {
+    inMemoryRateLimits.clear();
+    inMemoryRevocations.clear();
+  }
+
+  return { deletedCount: deletedKeys.length, deletedKeys };
+}
+
+/**
+ * Provisiona ou redefine os PINs de 6 dígitos de Rangel e Jack de forma segura.
+ * Suporta PINs individuais.
+ * Não exige PIN anterior.
+ * Limpa bloqueios de rate-limit e invalida sessões antigas.
+ */
+export async function adminSetupUserPins(
+  pinRangel: string,
+  pinJack: string,
+  options?: { resetData?: boolean }
+): Promise<{ accountRangel: StoredUserAccount; accountJack: StoredUserAccount }> {
+  const cleanPinRangel = pinRangel.trim();
+  const cleanPinJack = pinJack.trim();
+
+  if (!/^\d{6}$/.test(cleanPinRangel) || !/^\d{6}$/.test(cleanPinJack)) {
+    throw new Error('PIN inválido: ambos os PINs devem ter exatamente 6 dígitos numéricos.');
+  }
+
+  const existingRangel = await getUserAccount('person-rangel');
+  const existingJack = await getUserAccount('person-geicsania');
+
+  const now = new Date().toISOString();
+  const saltRangel = generateSalt(16);
+  const saltJack = generateSalt(16);
+  const hashRangel = await hashPassword(cleanPinRangel, saltRangel);
+  const hashJack = await hashPassword(cleanPinJack, saltJack);
+
+  const shouldWipeData = options?.resetData === true;
+
+  const accountRangel: StoredUserAccount = {
+    id: 'person-rangel',
+    username: 'rangel',
+    name: 'Rangel',
+    birthDate: shouldWipeData ? '' : (existingRangel?.birthDate || ''),
+    age: shouldWipeData ? 0 : (existingRangel?.age || 0),
+    initialWeightKg: shouldWipeData ? null : (existingRangel?.initialWeightKg ?? null),
+    heightCm: shouldWipeData ? null : (existingRangel?.heightCm ?? null),
+    goal: shouldWipeData ? 'Emagrecimento & Definição' : (existingRangel?.goal || 'Emagrecimento & Definição'),
+    activityLevel: shouldWipeData ? 'Moderado (3-4x por semana)' : (existingRangel?.activityLevel || 'Moderado (3-4x por semana)'),
+    salt: saltRangel,
+    passwordHash: hashRangel,
+    createdAt: shouldWipeData ? now : (existingRangel?.createdAt || now),
+    updatedAt: now
+  };
+
+  const accountJack: StoredUserAccount = {
+    id: 'person-geicsania',
+    username: 'jack',
+    name: 'Jack',
+    birthDate: shouldWipeData ? '' : (existingJack?.birthDate || ''),
+    age: shouldWipeData ? 0 : (existingJack?.age || 0),
+    initialWeightKg: shouldWipeData ? null : (existingJack?.initialWeightKg ?? null),
+    heightCm: shouldWipeData ? null : (existingJack?.heightCm ?? null),
+    goal: shouldWipeData ? 'Recomposição Corporal' : (existingJack?.goal || 'Recomposição Corporal'),
+    activityLevel: shouldWipeData ? 'Moderado (3-4x por semana)' : (existingJack?.activityLevel || 'Moderado (3-4x por semana)'),
+    salt: saltJack,
+    passwordHash: hashJack,
+    createdAt: shouldWipeData ? now : (existingJack?.createdAt || now),
+    updatedAt: now
+  };
+
+  if (isCloudConfigured()) {
+    const jsonRangel = JSON.stringify(accountRangel);
+    const jsonJack = JSON.stringify(accountJack);
+
+    const ops: Promise<unknown>[] = [
+      kvExecute('SET', 'hitfit:user:person-rangel', jsonRangel),
+      kvExecute('SET', 'hitfit:user:rangel', jsonRangel),
+      kvExecute('SET', 'hitfit:user:person-geicsania', jsonJack),
+      kvExecute('SET', 'hitfit:user:jack', jsonJack),
+      kvExecute('SET', 'hitfit:user:geicsania', jsonJack),
+      // Reseta rate-limits
+      kvExecute('DEL', 'hitfit:ratelimit:account:person-rangel'),
+      kvExecute('DEL', 'hitfit:ratelimit:account:person-geicsania'),
+      // Revoga sessões antigas
+      kvExecute('SET', 'hitfit:session:revoked:person-rangel', String(Date.now())),
+      kvExecute('SET', 'hitfit:session:revoked:person-geicsania', String(Date.now()))
+    ];
+
+    if (shouldWipeData) {
+      ops.push(
+        kvExecute('DEL', 'hitfit:data:person-rangel'),
+        kvExecute('DEL', 'hitfit:data:person-geicsania')
+      );
+    }
+
+    await Promise.all(ops);
+  } else if (isProductionEnvironment()) {
+    throw new PersistentStorageNotConfiguredError();
+  } else {
+    // Memória local de teste
+    inMemoryUsers.set('person-rangel', accountRangel);
+    inMemoryUsers.set('rangel', accountRangel);
+    inMemoryUsers.set('person-geicsania', accountJack);
+    inMemoryUsers.set('jack', accountJack);
+    inMemoryUsers.set('geicsania', accountJack);
+    inMemoryRateLimits.clear();
+    inMemoryRevocations.set('person-rangel', Date.now());
+    inMemoryRevocations.set('person-geicsania', Date.now());
+    if (shouldWipeData) {
+      inMemoryAthleteData.clear();
+    }
+  }
+
+  return { accountRangel, accountJack };
 }

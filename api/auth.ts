@@ -7,11 +7,11 @@ import {
   calculateAge,
   isAdminKeyConfigured,
   verifyAdminKey,
-  canModifyAthleteData,
-  AllowedRole
-} from '../lib/auth-crypto';
+  isAuthSecretConfigured,
+  canModifyAthleteData
+} from '../lib/auth-crypto.ts';
+import type { AllowedRole } from '../lib/auth-crypto.ts';
 import {
-  createAtomicUserAccount,
   updateUserAccount,
   getUserAccount,
   saveAthleteData,
@@ -21,8 +21,12 @@ import {
   resetFailedLoginAttempts,
   revokeUserSessions,
   isSessionRevoked,
-  StoredUserAccount
-} from '../lib/cloud-store';
+  adminResetHitFitNamespace,
+  adminSetupUserPins,
+  isCloudConfigured,
+  isProductionEnvironment
+} from '../lib/cloud-store.ts';
+import type { StoredUserAccount } from '../lib/cloud-store.ts';
 
 export const config = {
   runtime: 'edge'
@@ -47,13 +51,24 @@ export default async function handler(req: Request) {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  // 1. Garante chave de criptografia de autenticação robusta (sem quebrar a produção)
-  if (!process.env.HITFIT_AUTH_SECRET) {
-    process.env.HITFIT_AUTH_SECRET = 'hitfit_duo_pro_master_crypto_seed_2026_production_secure_key';
+  // 1. Verificação estrita de segurança: exige HITFIT_AUTH_SECRET no ambiente do servidor (>= 32 chars)
+  if (!isAuthSecretConfigured()) {
+    return jsonResponse(500, {
+      error: 'A chave de segurança de autenticação (HITFIT_AUTH_SECRET) não está configurada no servidor ou possui menos de 32 caracteres. Configure HITFIT_AUTH_SECRET no painel da Vercel.',
+      code: 'AUTH_SECRET_NOT_CONFIGURED'
+    });
+  }
+
+  // 2. Proteção de persistência: em produção, falhar se o armazenamento persistente não estiver disponível
+  if (isProductionEnvironment() && !isCloudConfigured()) {
+    return jsonResponse(503, {
+      error: 'Armazenamento persistente (KV / Redis) não configurado no ambiente de produção.',
+      code: 'PERSISTENT_STORAGE_NOT_CONFIGURED'
+    });
   }
 
   // ==========================================
-  // GET: Obter sessão ativa ou status das contas
+  // GET: Obter sessão ativa ou status real das contas
   // ==========================================
   if (req.method === 'GET') {
     const authHeader = req.headers.get('authorization');
@@ -93,22 +108,29 @@ export default async function handler(req: Request) {
       });
     }
 
-    // Retorna status das contas pronto para login
+    // Consulta verídica às contas no Redis / KV
+    const userRangel = await getUserAccount('person-rangel');
+    const userJack = await getUserAccount('person-geicsania');
+    const hasRangel = Boolean(userRangel);
+    const hasJack = Boolean(userJack);
+    const isSetupNeeded = !hasRangel || !hasJack;
+
     return jsonResponse(200, {
-      cloudConnected: true,
-      isSetupNeeded: false,
+      cloudConnected: isCloudConfigured(),
+      isSetupNeeded,
+      adminKeyConfigured: isAdminKeyConfigured(),
       accounts: [
         {
           id: 'person-rangel',
           username: 'rangel',
-          name: 'Rangel',
-          hasAccount: true
+          name: userRangel?.name || 'Rangel',
+          hasAccount: hasRangel
         },
         {
           id: 'person-geicsania',
           username: 'jack',
-          name: 'Jack',
-          hasAccount: true
+          name: userJack?.name || 'Jack',
+          hasAccount: hasJack
         }
       ]
     });
@@ -127,127 +149,123 @@ export default async function handler(req: Request) {
 
   const action = body.action as string;
 
-  // ==========================================
-  // BLOQUEIO TOTAL DE CADASTRO PÚBLICO
-  // ==========================================
-  if (action === 'register') {
-    return jsonResponse(403, {
-      error: 'O cadastro público inicial foi desativado. As contas de Rangel e Jack já existem e estão prontas para login.',
-      code: 'PUBLIC_REGISTRATION_DISABLED'
-    });
-  }
-
-  // ==========================================
-  // AÇÃO 1: CONFIGURAÇÃO INICIAL DO PIN (ETAPA ADMINISTRATIVA SEGURA)
-  // Define o PIN inicial de 6 dígitos para as duas contas definitivas.
-  // EXIGE estritamente a chave administrativa do proprietário (HITFIT_ADMIN_KEY).
-  // Se uma conta já existir, NÃO a sobrescreve, preservando credenciais existentes.
-  // ==========================================
-  if (action === 'setup_pins') {
-    // 1. Autorização Administrativa Estrita (somente proprietário com HITFIT_ADMIN_KEY)
-    if (!isAdminKeyConfigured()) {
-      return jsonResponse(503, {
-        error: 'A chave administrativa do proprietário (HITFIT_ADMIN_KEY) não está configurada no servidor. Configure HITFIT_ADMIN_KEY no painel da Vercel para autorizar o provisionamento inicial.',
-        code: 'ADMIN_KEY_NOT_CONFIGURED'
-      });
-    }
-
-    const providedAdminKey = (
+  function getProvidedAdminKey(): string {
+    return (
       req.headers.get('x-admin-key') ||
       (typeof body.adminKey === 'string' ? body.adminKey : '') ||
       (req.headers.get('authorization')?.startsWith('Bearer ')
         ? req.headers.get('authorization')!.slice(7)
         : '')
     ).trim();
+  }
 
-    if (!verifyAdminKey(providedAdminKey)) {
+  // ==========================================
+  // BLOQUEIO TOTAL DE CADASTRO PÚBLICO
+  // ==========================================
+  if (action === 'register') {
+    return jsonResponse(403, {
+      error: 'O cadastro público inicial foi desativado. As contas de Rangel e Jack são exclusivas e gerenciadas pelo proprietário.',
+      code: 'PUBLIC_REGISTRATION_DISABLED'
+    });
+  }
+
+  // ==========================================
+  // AÇÃO ADMINISTRATIVA: RESET TOTAL DO NAMESPACE HIT-FIT
+  // Permite apagar dados de forma segura sem risco de atingir outros apps no Redis.
+  // ==========================================
+  if (action === 'admin_reset') {
+    if (!isAdminKeyConfigured()) {
+      return jsonResponse(503, {
+        error: 'A chave administrativa do proprietário (HITFIT_ADMIN_KEY) não está configurada no servidor.',
+        code: 'ADMIN_KEY_NOT_CONFIGURED'
+      });
+    }
+
+    const providedKey = getProvidedAdminKey();
+    if (!verifyAdminKey(providedKey)) {
       return jsonResponse(401, {
-        error: 'Chave administrativa não autorizada. O provisionamento inicial de PINs só pode ser realizado pelo proprietário com a chave administrativa correta.',
+        error: 'Chave administrativa incorreta ou não fornecida.',
         code: 'UNAUTHORIZED_ADMIN'
       });
     }
 
-    const existingRangel = await getUserAccount('person-rangel');
-    const existingJack = await getUserAccount('person-geicsania');
+    const resetResult = await adminResetHitFitNamespace({
+      deleteUsers: body.deleteUsers !== false,
+      deleteData: body.deleteData !== false,
+      clearRateLimits: true
+    });
 
-    if (existingRangel && existingJack) {
-      return jsonResponse(409, {
-        error: 'O sistema já foi inicializado anteriormente. Ambas as contas já existem. Para redefinir o PIN, realize a alteração autenticada na aba Perfil.',
-        code: 'SYSTEM_ALREADY_INITIALIZED'
+    return jsonResponse(200, {
+      success: true,
+      message: 'Namespace hitfit:* reinicializado com sucesso.',
+      deletedCount: resetResult.deletedCount,
+      deletedKeys: resetResult.deletedKeys
+    });
+  }
+
+  // ==========================================
+  // AÇÃO ADMINISTRATIVA: CONFIGURAÇÃO / REDEFINIÇÃO DE PINs
+  // Define ou redefine os PINs de 6 dígitos para Rangel e Jack.
+  // EXIGE estritamente a chave administrativa do proprietário (HITFIT_ADMIN_KEY).
+  // Suporta PINs individuais e preservação opcional de perfil.
+  // ==========================================
+  if (action === 'setup_pins' || action === 'admin_setup_pins') {
+    if (!isAdminKeyConfigured()) {
+      return jsonResponse(503, {
+        error: 'A chave administrativa do proprietário (HITFIT_ADMIN_KEY) não está configurada no servidor. Configure HITFIT_ADMIN_KEY no painel da Vercel para autorizar o gerenciamento de PINs.',
+        code: 'ADMIN_KEY_NOT_CONFIGURED'
       });
     }
 
-    const pin = typeof body.pin === 'string' ? body.pin.trim() : '';
-    const confirmPin = typeof body.confirmPin === 'string' ? body.confirmPin.trim() : '';
+    const providedAdminKey = getProvidedAdminKey();
+    if (!verifyAdminKey(providedAdminKey)) {
+      return jsonResponse(401, {
+        error: 'Chave administrativa não autorizada. O provisionamento e redefinição de PINs só pode ser realizado pelo proprietário com a chave correta.',
+        code: 'UNAUTHORIZED_ADMIN'
+      });
+    }
 
-    if (!/^\d{6}$/.test(pin)) {
+    const pinRangel = (
+      typeof body.pinRangel === 'string'
+        ? body.pinRangel
+        : typeof body.pin === 'string'
+        ? body.pin
+        : ''
+    ).trim();
+
+    const pinJack = (
+      typeof body.pinJack === 'string'
+        ? body.pinJack
+        : typeof body.pin === 'string'
+        ? body.pin
+        : ''
+    ).trim();
+
+    if (!/^\d{6}$/.test(pinRangel)) {
       return jsonResponse(400, {
-        error: 'PIN inválido: informe exatamente 6 dígitos numéricos.',
-        code: 'INVALID_PIN'
+        error: 'PIN de Rangel inválido: informe exatamente 6 dígitos numéricos.',
+        code: 'INVALID_PIN_RANGEL'
       });
     }
 
-    if (pin !== confirmPin) {
+    if (!/^\d{6}$/.test(pinJack)) {
       return jsonResponse(400, {
-        error: 'Os PINs digitados não coincidem.',
-        code: 'PIN_MISMATCH'
+        error: 'PIN de Jack inválido: informe exatamente 6 dígitos numéricos.',
+        code: 'INVALID_PIN_JACK'
       });
     }
+
+    const resetData = body.resetData === true;
+    const { accountRangel, accountJack } = await adminSetupUserPins(pinRangel, pinJack, { resetData });
 
     const now = new Date().toISOString();
-
-    // Se Rangel ainda não foi criado, cria agora de forma atômica
-    if (!existingRangel) {
-      const saltRangel = generateSalt(16);
-      const hashRangel = await hashPassword(pin, saltRangel);
-      const accountRangel: StoredUserAccount = {
-        id: 'person-rangel',
-        username: 'rangel',
-        name: 'Rangel',
-        birthDate: '',
-        age: 0,
-        initialWeightKg: null,
-        heightCm: null,
-        goal: 'Emagrecimento & Definição',
-        activityLevel: 'Moderado (3-4x por semana)',
-        salt: saltRangel,
-        passwordHash: hashRangel,
-        createdAt: now,
-        updatedAt: now
-      };
-      await createAtomicUserAccount(accountRangel);
-    }
-
-    // Se Jack ainda não foi criada, cria agora de forma atômica
-    if (!existingJack) {
-      const saltJack = generateSalt(16);
-      const hashJack = await hashPassword(pin, saltJack);
-      const accountJack: StoredUserAccount = {
-        id: 'person-geicsania',
-        username: 'jack',
-        name: 'Jack',
-        birthDate: '',
-        age: 0,
-        initialWeightKg: null,
-        heightCm: null,
-        goal: 'Recomposição Corporal',
-        activityLevel: 'Moderado (3-4x por semana)',
-        salt: saltJack,
-        passwordHash: hashJack,
-        createdAt: now,
-        updatedAt: now
-      };
-      await createAtomicUserAccount(accountJack);
-    }
-
-    // Inicializa fichas vazias de dados se não existirem
     const athleteRangel = await getAthleteData('person-rangel');
-    if (!athleteRangel) {
+    if (!athleteRangel || resetData) {
       await saveAthleteData({
         userId: 'person-rangel',
-        currentWeightKg: null,
+        currentWeightKg: accountRangel.initialWeightKg,
         weightHistory: [],
-        weightGoal: { initialKg: null, currentKg: null, targetKg: null, objective: 'Emagrecimento & Definição', updatedAt: now },
+        weightGoal: { initialKg: accountRangel.initialWeightKg, currentKg: accountRangel.initialWeightKg, targetKg: null, objective: accountRangel.goal, updatedAt: now },
         waterLogs: {},
         nutritionDays: {},
         savedSets: {},
@@ -257,12 +275,12 @@ export default async function handler(req: Request) {
     }
 
     const athleteJack = await getAthleteData('person-geicsania');
-    if (!athleteJack) {
+    if (!athleteJack || resetData) {
       await saveAthleteData({
         userId: 'person-geicsania',
-        currentWeightKg: null,
+        currentWeightKg: accountJack.initialWeightKg,
         weightHistory: [],
-        weightGoal: { initialKg: null, currentKg: null, targetKg: null, objective: 'Recomposição Corporal', updatedAt: now },
+        weightGoal: { initialKg: accountJack.initialWeightKg, currentKg: accountJack.initialWeightKg, targetKg: null, objective: accountJack.goal, updatedAt: now },
         waterLogs: {},
         nutritionDays: {},
         savedSets: {},
@@ -271,19 +289,28 @@ export default async function handler(req: Request) {
       });
     }
 
+    // Reseta qualquer bloqueio de IP do administrador
+    const clientIp = (
+      req.headers.get('x-forwarded-for')?.split(',')[0] ||
+      req.headers.get('x-real-ip') ||
+      '127.0.0.1'
+    ).trim();
+    await resetFailedLoginAttempts('person-rangel', clientIp);
+    await resetFailedLoginAttempts('person-geicsania', clientIp);
+
     return jsonResponse(200, {
       success: true,
-      message: 'PIN inicial de 6 dígitos configurado com sucesso para Rangel e Jack. O sistema está pronto para login.'
+      message: 'PINs de 6 dígitos configurados com sucesso para Rangel e Jack. O sistema está pronto para login.'
     });
   }
 
   // ==========================================
-  // AÇÃO 2: LOGIN COM PIN DE 6 DÍGITOS E RATE LIMITING
+  // AÇÃO: LOGIN COM PIN DE 6 DÍGITOS E RATE LIMITING
   // Proteção contra brute-force por conta e por IP (max 5 tentativas em 15 min -> 429)
   // ==========================================
   if (action === 'login') {
     const { usernameOrRole, password } = body;
-    if (!usernameOrRole || !password || typeof password !== 'string') {
+    if (!usernameOrRole || password === undefined || password === null) {
       return jsonResponse(400, { error: 'Informe o atleta e o PIN de acesso.', code: 'MISSING_CREDENTIALS' });
     }
 
@@ -297,7 +324,14 @@ export default async function handler(req: Request) {
       return jsonResponse(400, { error: 'Perfil de atleta não reconhecido.', code: 'INVALID_ROLE' });
     }
 
-    // Extrai o IP do cliente (Edge / Vercel headers)
+    const cleanPin = (typeof password === 'string' ? password : String(password)).trim();
+    if (!/^\d{6}$/.test(cleanPin)) {
+      return jsonResponse(400, {
+        error: 'PIN inválido: informe exatamente 6 dígitos numéricos.',
+        code: 'INVALID_PIN_FORMAT'
+      });
+    }
+
     const clientIp = (
       req.headers.get('x-forwarded-for')?.split(',')[0] ||
       req.headers.get('x-real-ip') ||
@@ -326,18 +360,24 @@ export default async function handler(req: Request) {
     const user = await getUserAccount(targetId);
     if (!user) {
       return jsonResponse(404, {
-        error: 'Conta de atleta não encontrada no banco de dados. O provisionamento inicial seguro deve ser realizado com a chave de administrador.',
+        error: 'Conta de atleta não encontrada no banco de dados. Utilize a chave administrativa para inicializar o cadastro.',
         code: 'USER_NOT_FOUND'
       });
     }
 
-    const isMatch = await verifyPassword(password.trim(), user.salt, user.passwordHash);
+    const isMatch = await verifyPassword(cleanPin, user.salt, user.passwordHash);
     if (!isMatch) {
-      // Registra a tentativa falha para conta e IP
       await recordFailedLoginAttempt(targetId, clientIp);
+      const updatedRateLimit = await getFailedLoginAttempts(targetId, clientIp);
+      const attemptsCount = updatedRateLimit.attempts ?? (updatedRateLimit as { count?: number }).count ?? 1;
+      const remainingAttempts = Math.max(0, 5 - attemptsCount);
+
       return jsonResponse(401, {
-        error: 'PIN incorreto. Verifique os 6 dígitos digitados.',
-        code: 'INVALID_PASSWORD'
+        error: remainingAttempts > 0
+          ? `PIN incorreto. Você tem mais ${remainingAttempts} tentativa(s) antes do bloqueio temporário.`
+          : 'PIN incorreto. Limite de tentativas atingido. Acesso temporariamente bloqueado.',
+        code: 'INVALID_PASSWORD',
+        remainingAttempts
       });
     }
 

@@ -28,7 +28,7 @@ export class AuthSecretMissingError extends Error {
  * Verifica se a variável de ambiente do segredo de autenticação está configurada com tamanho seguro
  */
 export function isAuthSecretConfigured(): boolean {
-  const secret = process.env.HITFIT_AUTH_SECRET;
+  const secret = process.env.HITFIT_AUTH_SECRET || process.env.AUTH_SECRET;
   return Boolean(secret && secret.trim().length >= MIN_SECRET_LENGTH);
 }
 
@@ -37,7 +37,7 @@ export function isAuthSecretConfigured(): boolean {
  * Lança erro caso o segredo esteja ausente ou seja inseguro.
  */
 export function getAuthSecret(): string {
-  const secret = process.env.HITFIT_AUTH_SECRET;
+  const secret = process.env.HITFIT_AUTH_SECRET || process.env.AUTH_SECRET;
   if (!secret || secret.trim().length < MIN_SECRET_LENGTH) {
     throw new AuthSecretMissingError();
   }
@@ -68,7 +68,7 @@ const MIN_ADMIN_KEY_LENGTH = 16;
  * Retorna true se a chave administrativa do proprietário estiver configurada no servidor
  */
 export function isAdminKeyConfigured(): boolean {
-  const adminKey = process.env.HITFIT_ADMIN_KEY || process.env.HITFIT_SETUP_SECRET;
+  const adminKey = process.env.HITFIT_ADMIN_KEY || process.env.ADMIN_KEY || process.env.HITFIT_SETUP_SECRET;
   return Boolean(adminKey && adminKey.trim().length >= MIN_ADMIN_KEY_LENGTH);
 }
 
@@ -76,7 +76,7 @@ export function isAdminKeyConfigured(): boolean {
  * Valida a chave administrativa do proprietário em tempo constante
  */
 export function verifyAdminKey(providedKey: string): boolean {
-  const adminKey = process.env.HITFIT_ADMIN_KEY || process.env.HITFIT_SETUP_SECRET;
+  const adminKey = process.env.HITFIT_ADMIN_KEY || process.env.ADMIN_KEY || process.env.HITFIT_SETUP_SECRET;
   if (!adminKey || adminKey.trim().length < MIN_ADMIN_KEY_LENGTH) return false;
   if (!providedKey || typeof providedKey !== 'string') return false;
 

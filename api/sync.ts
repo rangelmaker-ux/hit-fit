@@ -1,16 +1,17 @@
 import {
   verifySessionToken,
   canModifyAthleteData,
-  getAuthorizedPartnerId
-} from '../lib/auth-crypto';
+  getAuthorizedPartnerId,
+  isAuthSecretConfigured
+} from '../lib/auth-crypto.ts';
 import {
   saveAthleteData,
   getAthleteData,
   PersistentStorageNotConfiguredError,
   PersistentStorageWriteError,
-  StoredAthleteData,
-  CloudSavedSetState
-} from '../lib/cloud-store';
+  isCloudConfigured
+} from '../lib/cloud-store.ts';
+import type { StoredAthleteData, CloudSavedSetState } from '../lib/cloud-store.ts';
 
 export const config = {
   runtime: 'edge'
@@ -35,12 +36,23 @@ export default async function handler(req: Request) {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  // 1. Garante chave de segurança e fallback transparente
-  if (!process.env.HITFIT_AUTH_SECRET) {
-    process.env.HITFIT_AUTH_SECRET = 'hitfit_duo_pro_master_crypto_seed_2026_production_secure_key';
+  // 1. Exige segredo de autenticação configurado exclusivamente no ambiente
+  if (!isAuthSecretConfigured()) {
+    return jsonResponse(500, {
+      error: 'CONFIGURAÇÃO DE SEGURANÇA AUSENTE: HITFIT_AUTH_SECRET não configurado ou menor que 32 caracteres.',
+      code: 'AUTH_SECRET_NOT_CONFIGURED'
+    });
   }
 
-  // 2. Verificação Estrita do Token de Sessão em qualquer operação
+  // 2. Exige banco permanente em ambiente de produção (sem fallbacks em memória)
+  if (!isCloudConfigured() && (process.env.VERCEL || process.env.NODE_ENV === 'production')) {
+    return jsonResponse(503, {
+      error: 'BANCO DE DADOS INDISPONÍVEL: KV_REST_API_URL e KV_REST_API_TOKEN não configurados no servidor.',
+      code: 'PERSISTENT_STORAGE_NOT_CONFIGURED'
+    });
+  }
+
+  // 3. Verificação Estrita do Token de Sessão em qualquer operação
   const authHeader = req.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return jsonResponse(401, {

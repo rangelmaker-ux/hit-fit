@@ -133,31 +133,151 @@ export async function setupInitialPins(
   }
 }
 
+export interface AdminSetupPinsPayload {
+  adminKey: string;
+  pinRangel: string;
+  pinJack: string;
+  resetData?: boolean;
+}
+
 /**
- * Realiza login com PIN de 6 dígitos via /api/auth
+ * Redefine ou configura PINs administrativos individuais para Rangel e Jack sem exigir PIN anterior.
+ */
+export async function adminSetupPins(
+  payload: AdminSetupPinsPayload
+): Promise<{ success: boolean; message?: string; error?: string; code?: string; status?: number }> {
+  try {
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': payload.adminKey.trim()
+      },
+      body: JSON.stringify({
+        action: 'admin_setup_pins',
+        adminKey: payload.adminKey.trim(),
+        pinRangel: payload.pinRangel.trim(),
+        pinJack: payload.pinJack.trim(),
+        resetData: payload.resetData === true
+      })
+    });
+
+    const data = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      message?: string;
+      error?: string;
+      code?: string;
+    };
+
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        error: data.error || `Erro HTTP ${res.status}`,
+        code: data.code,
+        status: res.status
+      };
+    }
+
+    return { success: true, message: data.message, status: 200 };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Falha de conexão com o servidor.',
+      status: 0
+    };
+  }
+}
+
+/**
+ * Reinicializa de forma estrita e segura o namespace hitfit:* no banco em nuvem (Redis)
+ */
+export async function adminResetHitFit(
+  adminKey: string,
+  options?: { deleteUsers?: boolean; deleteData?: boolean }
+): Promise<{ success: boolean; message?: string; error?: string; deletedCount?: number }> {
+  try {
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminKey.trim()
+      },
+      body: JSON.stringify({
+        action: 'admin_reset',
+        adminKey: adminKey.trim(),
+        deleteUsers: options?.deleteUsers !== false,
+        deleteData: options?.deleteData !== false
+      })
+    });
+
+    const data = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      message?: string;
+      error?: string;
+      deletedCount?: number;
+    };
+
+    if (!res.ok || !data.success) {
+      return { success: false, error: data.error || `Erro HTTP ${res.status}` };
+    }
+
+    return { success: true, message: data.message, deletedCount: data.deletedCount };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Falha de conexão com o servidor.'
+    };
+  }
+}
+
+export interface LoginResult {
+  success: boolean;
+  user?: AuthenticatedUser;
+  error?: string;
+  code?: string;
+  status?: number;
+  remainingAttempts?: number;
+  retryAfter?: number;
+}
+
+/**
+ * Realiza login com PIN de 6 dígitos via /api/auth com captura de status e tentativas
  */
 export async function loginAthlete(
   usernameOrRole: string,
   pin: string
-): Promise<{ success: boolean; user?: AuthenticatedUser; error?: string }> {
+): Promise<LoginResult> {
   try {
+    const cleanPin = (typeof pin === 'string' ? pin : String(pin)).trim();
     const res = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'login', usernameOrRole, password: pin })
+      body: JSON.stringify({ action: 'login', usernameOrRole, password: cleanPin })
     });
 
-    const data = (await res.json()) as AuthResponse;
+    const data = (await res.json().catch(() => ({}))) as AuthResponse & {
+      code?: string;
+      remainingAttempts?: number;
+      retryAfter?: number;
+    };
+
     if (!res.ok || !data.success) {
-      return { success: false, error: data.error || 'PIN incorreto ou usuário não encontrado.' };
+      return {
+        success: false,
+        error: data.error || (res.status === 401 ? 'PIN incorreto.' : `Erro HTTP ${res.status}`),
+        code: data.code,
+        status: res.status,
+        remainingAttempts: data.remainingAttempts,
+        retryAfter: data.retryAfter
+      };
     }
 
     if (data.token) setStoredToken(data.token);
     if (data.user) setStoredUser(data.user);
-    return { success: true, user: data.user };
+    return { success: true, user: data.user, status: 200 };
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : 'Falha de conexão com o servidor.';
-    return { success: false, error: errMsg };
+    return { success: false, error: errMsg, status: 0 };
   }
 }
 
